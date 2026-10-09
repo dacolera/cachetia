@@ -492,3 +492,30 @@ input:focus { outline: 3px solid var(--gold); outline-offset: 1px; }
 .update-banner .btn { min-height: 44px; border-radius: 999px; }
 
 .app-version { margin: -16px 0 0; font-size: 0.8rem; opacity: 0.45; font-variant-numeric: tabular-nums; }
+
+/* Dinheiro */
+.stake-input { width: 160px; flex: none; min-height: 54px; border-radius: 999px; }
+.center-pot { color: var(--paper); font-weight: 700; font-size: calc(var(--cw) * 0.1); opacity: 0.9; }
+.tag.pact-tag { background: #e6f1ea; color: var(--felt); font-weight: 700; }
+.chip-sub { font-size: 0.8rem; opacity: 0.7; font-weight: 500; }
+.pact-list h3 { margin: 0 0 6px; font-size: 1rem; color: var(--ink-2); }
+.pact-list ul { margin: 0; padding-left: 18px; color: var(--ink-2); }
+.settlement { display: grid; gap: 10px; border-top: 1px solid #e8e2d2; padding-top: 14px; }
+.settlement p { margin: 0; color: var(--ink); }
+.settlement-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.settlement-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; }
+.money-pos { color: var(--win); }
+.money-neg { color: var(--red); }
+.money-zero { color: var(--ink-2); }
+.detail-section { margin-top: 16px; }
+.detail-section ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.panel.paper { background: var(--paper); color: var(--ink); }
+.panel.paper .settlement { border-top: 0; padding-top: 0; }
+.modal:has(.settlement) { width: min(620px, 100%); }
+.modal:has(.settlement) .victory { grid-template-columns: auto 1fr; justify-items: start; text-align: left; column-gap: 18px; padding: 0; }
+.modal:has(.settlement) .victory-photo { grid-row: span 2; }
+.modal:has(.settlement) .victory .avatar-xl { width: 84px; height: 84px; }
+.modal:has(.settlement) .victory-photo .trophy { font-size: 2rem; right: -14px; bottom: -8px; }
+.modal:has(.settlement) .victory strong { font-size: 1.8rem; align-self: end; }
+.modal:has(.settlement) .victory .muted { align-self: start; }
+.settlement-list { grid-template-columns: 1fr 1fr; column-gap: 24px; }
