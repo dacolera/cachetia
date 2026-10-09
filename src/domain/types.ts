@@ -64,6 +64,10 @@ export interface MatchState {
   dealerId?: string;
   /** Quem deu as cartas em cada rodada já jogada. */
   dealers: string[];
+  /** Quem é mão (primeiro a receber, à direita de quem dá) na próxima rodada. */
+  handId?: string;
+  /** Quem foi mão em cada rodada já jogada. */
+  hands: string[];
   winnerId?: string;
   finished: boolean;
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { PokerTable } from '../components/PokerTable';
 import { fromCashier } from '../components/tableLayout';
-import { DealerBadge, Modal, Pips, TopBar } from '../components/ui';
+import { DealerBadge, HandBadge, Modal, Pips, TopBar } from '../components/ui';
 import { canJoin, joinOpen, computeState, isBorracha, joinPoints, lastUndoable, previewRound } from '../domain/rules';
 import type { RoundOutcome } from '../domain/types';
 import type { Navigate } from '../nav';
@@ -94,7 +94,17 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
             ) : (
               !state.finished && (
                 <>
-                  {state.dealerId && <span className="center-dealer">♠ {store.playerName(state.dealerId)} dá as cartas</span>}
+                  {state.dealerId && (
+                    <span className="center-dealer">
+                      ♠ {store.playerName(state.dealerId)} dá as cartas
+                      {state.handId && (
+                        <>
+                          <br />
+                          {store.playerName(state.handId)} é mão
+                        </>
+                      )}
+                    </span>
+                  )}
                   <button className="btn primary center-btn" onClick={startRound}>
                     Lançar rodada
                   </button>
@@ -108,11 +118,13 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
           const after = preview?.[s.playerId];
           const eliminated = s.points === 0;
           const isDealer = state.dealerId === s.playerId;
+          const isHand = state.handId === s.playerId;
           return {
             key: s.playerId,
             content: (
-              <article className={['card', eliminated && 'out', out && `o-${out}`, isDealer && 'is-dealer'].filter(Boolean).join(' ')}>
+              <article className={['card', eliminated && 'out', out && `o-${out}`, isDealer && 'is-dealer', isHand && 'is-hand'].filter(Boolean).join(' ')}>
                 {isDealer && <DealerBadge />}
+                {isHand && <HandBadge />}
                 <span className="card-name">{store.playerName(s.playerId)}</span>
                 <div className="card-top">
                   <Avatar player={store.player(s.playerId)} className="card-avatar" />
