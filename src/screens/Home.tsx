@@ -94,6 +94,7 @@ export function Home({ go }: { go: Navigate }) {
           }}
         />
       </footer>
+      <p className="app-version">versão {__APP_VERSION__}</p>
 
       {confirmNew && ongoing && (
         <Modal

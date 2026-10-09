@@ -490,3 +490,5 @@ input:focus { outline: 3px solid var(--gold); outline-offset: 1px; }
   animation: fade 0.2s;
 }
 .update-banner .btn { min-height: 44px; border-radius: 999px; }
+
+.app-version { margin: -16px 0 0; font-size: 0.8rem; opacity: 0.45; font-variant-numeric: tabular-nums; }
