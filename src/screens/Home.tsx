@@ -64,6 +64,9 @@ export function Home({ go }: { go: Navigate }) {
         <button className="btn primary big" onClick={() => (ongoing ? setConfirmNew(true) : go({ name: 'new' }))}>
           Nova partida
         </button>
+        <button className="btn big" onClick={() => go({ name: 'cash' })}>
+          💵 Caixa
+        </button>
         <button className="btn big" onClick={() => go({ name: 'players' })}>
           Jogadores
         </button>

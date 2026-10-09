@@ -1,3 +1,4 @@
+import type { LedgerEntry } from '../domain/ledger';
 import type { Match, Player } from '../domain/types';
 
 /**
@@ -10,6 +11,9 @@ export interface Repository {
   listMatches(): Promise<Match[]>;
   saveMatch(match: Match): Promise<void>;
   deleteMatch(id: string): Promise<void>;
+  listLedger(): Promise<LedgerEntry[]>;
+  addLedger(entries: LedgerEntry[]): Promise<void>;
+  removeLedger(ids: string[]): Promise<void>;
   exportAll(): Promise<Backup>;
   importAll(backup: Backup): Promise<void>;
 }
@@ -19,4 +23,6 @@ export interface Backup {
   exportedAt: string;
   players: Player[];
   matches: Match[];
+  /** Movimentos do caixa. Backups antigos não têm. */
+  ledger?: LedgerEntry[];
 }

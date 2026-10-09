@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { missingStakes, payoutEntries, validateStake, validateWithdraw, type LedgerEntry } from './domain/ledger';
 import { validatePact } from './domain/money';
 import { START_POINTS, canJoin, computeState, lastUndoable, validateRound } from './domain/rules';
 import type { Match, MatchEvent, Player } from './domain/types';
@@ -27,6 +28,14 @@ interface Store {
   joinMatch(matchId: string, playerId: string, points: number): void;
   undo(matchId: string): void;
   deleteMatch(matchId: string): void;
+  ledger: LedgerEntry[];
+  /** Casar: usa o crédito e, se precisar, o dinheiro entregue na hora (o excesso vira crédito). */
+  stake(matchId: string, playerId: string, depositCents: number): void;
+  deposit(playerId: string, cents: number): void;
+  withdraw(playerId: string, cents: number): void;
+  /** Paga o prêmio: `cashCents` sai em dinheiro, o resto do prêmio fica de crédito. */
+  payOut(matchId: string, cashCents: number): void;
+  removeLedgerEntry(id: string): void;
   exportBackup(): Promise<Backup>;
   importBackup(backup: Backup): Promise<void>;
 }
@@ -37,11 +46,13 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
   const [loaded, setLoaded] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
 
   const reload = useCallback(async () => {
-    const [p, m] = await Promise.all([repo.listPlayers(), repo.listMatches()]);
+    const [p, m, l] = await Promise.all([repo.listPlayers(), repo.listMatches(), repo.listLedger()]);
     setPlayers(p);
     setMatches(m);
+    setLedger(l);
     setLoaded(true);
   }, [repo]);
 
@@ -62,6 +73,24 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
       setMatches((list) => (list.some((x) => x.id === next.id) ? list.map((x) => (x.id === next.id ? next : x)) : [...list, next]));
       void repo.saveMatch(next);
     };
+
+    const addEntries = (entries: LedgerEntry[]) => {
+      if (entries.length === 0) return;
+      setLedger((list) => [...list, ...entries]);
+      void repo.addLedger(entries);
+    };
+
+    const removeEntries = (drop: (e: LedgerEntry) => boolean) => {
+      const ids = ledger.filter(drop).map((e) => e.id);
+      if (ids.length === 0) return;
+      const set = new Set(ids);
+      setLedger((list) => list.filter((e) => !set.has(e.id)));
+      void repo.removeLedger(ids);
+    };
+
+    const newEntry = (e: Omit<LedgerEntry, 'id' | 'at'>): LedgerEntry => ({ ...e, id: uid(), at: now() });
+
+    const isPayout = (matchId: string) => (e: LedgerEntry) => e.matchId === matchId && (e.kind === 'credit' || e.kind === 'prizeCash');
 
     const append = (matchId: string, ev: MatchEvent) => {
       const m = findMatch(matchId);
@@ -101,8 +130,10 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         return m;
       },
       addRound(matchId, winnerId, fled) {
-        const err = validateRound(computeState(findMatch(matchId)), { winnerId, fled });
+        const m = findMatch(matchId);
+        const err = validateRound(computeState(m), { winnerId, fled });
         if (err) throw new Error(err);
+        if (missingStakes(m, ledger).length > 0) throw new Error('Todos precisam casar antes da rodada.');
         append(matchId, { type: 'round', id: uid(), at: now(), winnerId, fled });
       },
       addPact(matchId, playerIds) {
@@ -120,12 +151,46 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
       },
       undo(matchId) {
         const m = findMatch(matchId);
-        if (!lastUndoable(m)) return;
-        putMatch({ ...m, events: m.events.slice(0, -1) });
+        const last = lastUndoable(m);
+        if (!last) return;
+        // Desfazer a rodada final cancela o pagamento do prêmio; desfazer uma entrada devolve o que a pessoa casou.
+        if (m.paidOutAt) removeEntries(isPayout(matchId));
+        if (last.type === 'join') removeEntries((e) => e.matchId === matchId && e.kind === 'stake' && e.playerId === last.playerId);
+        putMatch({ ...m, paidOutAt: undefined, events: m.events.slice(0, -1) });
       },
       deleteMatch(matchId) {
+        // Descartar devolve o que foi casado ao crédito de cada um; o dinheiro entregue continua como crédito.
+        removeEntries((e) => e.matchId === matchId);
         setMatches((list) => list.filter((x) => x.id !== matchId));
         void repo.deleteMatch(matchId);
+      },
+      ledger,
+      stake(matchId, playerId, depositCents) {
+        const m = findMatch(matchId);
+        const err = validateStake(m, ledger, playerId, depositCents);
+        if (err) throw new Error(err);
+        const entries = [];
+        if (depositCents > 0) entries.push(newEntry({ playerId, kind: 'deposit', amountCents: depositCents }));
+        entries.push(newEntry({ playerId, kind: 'stake', amountCents: m.stakeCents!, matchId }));
+        addEntries(entries);
+      },
+      deposit(playerId, cents) {
+        if (cents <= 0) throw new Error('Valor inválido.');
+        addEntries([newEntry({ playerId, kind: 'deposit', amountCents: cents })]);
+      },
+      withdraw(playerId, cents) {
+        const err = validateWithdraw(ledger, playerId, cents);
+        if (err) throw new Error(err);
+        addEntries([newEntry({ playerId, kind: 'withdraw', amountCents: cents })]);
+      },
+      payOut(matchId, cashCents) {
+        const m = findMatch(matchId);
+        if (m.paidOutAt || !m.finishedAt) return;
+        addEntries(payoutEntries(m, cashCents, newEntry));
+        putMatch({ ...m, paidOutAt: now() });
+      },
+      removeLedgerEntry(id) {
+        removeEntries((e) => e.id === id);
       },
       exportBackup: () => repo.exportAll(),
       async importBackup(backup) {
@@ -133,7 +198,7 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         await reload();
       },
     };
-  }, [loaded, players, matches, repo, reload]);
+  }, [loaded, players, matches, ledger, repo, reload]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

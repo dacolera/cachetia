@@ -57,6 +57,8 @@ export interface Match {
   cashierId?: string;
   /** Quanto cada jogador casa, em centavos. Partidas antigas não têm. */
   stakeCents?: number;
+  /** Quando o prêmio foi pago pelo caixa. */
+  paidOutAt?: string;
   finishedAt?: string;
   events: MatchEvent[];
 }

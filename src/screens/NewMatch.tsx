@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { PlayerForm } from '../components/PlayerForm';
 import { DealerBadge, TopBar } from '../components/ui';
+import { balanceOf } from '../domain/ledger';
 import { DEFAULT_STAKE_CENTS, formatMoney, parseMoney } from '../domain/money';
 import { MAX_PLAYERS, MIN_PLAYERS, computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
@@ -80,6 +81,7 @@ export function NewMatch({ go }: { go: Navigate }) {
               <button key={p.id} className={on ? 'player-tile on' : 'player-tile'} disabled={!on && full} onClick={() => toggle(p.id)}>
                 <Avatar player={p} className="avatar-lg" />
                 <span className="player-tile-name">{p.name}</span>
+                {balanceOf(store.ledger, p.id) > 0 && <span className="tile-credit">{formatMoney(balanceOf(store.ledger, p.id))}</span>}
                 {on && <span className="tile-check">✓</span>}
               </button>
             );

@@ -5,6 +5,7 @@ export type Route =
   | { name: 'history' }
   | { name: 'detail'; id: string }
   | { name: 'ranking' }
-  | { name: 'players' };
+  | { name: 'players' }
+  | { name: 'cash' };
 
 export type Navigate = (route: Route) => void;
