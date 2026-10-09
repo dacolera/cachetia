@@ -15,7 +15,9 @@ export interface JoinEvent {
   at: string;
   playerId: string;
   points: number;
-  /** Lugar na mesa: senta logo depois deste jogador. Sem ele, vai pro fim da roda. */
+  /** Quem entra no meio senta logo antes de quem vai dar as cartas naquela rodada. */
+  seatBefore?: string;
+  /** Formato antigo: sentava logo depois deste jogador. Mantido para ler partidas já salvas. */
   seatAfter?: string;
 }
 
@@ -64,6 +66,10 @@ export interface MatchState {
   dealerId?: string;
   /** Quem deu as cartas em cada rodada já jogada. */
   dealers: string[];
+  /** Quem é mão (primeiro a receber, à direita de quem dá) na próxima rodada. */
+  handId?: string;
+  /** Quem foi mão em cada rodada já jogada. */
+  hands: string[];
   winnerId?: string;
   finished: boolean;
 }

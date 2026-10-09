@@ -39,6 +39,15 @@ export function TopBar({ title, onBack, children }: { title: ReactNode; onBack?:
   );
 }
 
+/** Mão: o primeiro a receber cartas, logo à direita de quem dá. */
+export function HandBadge() {
+  return (
+    <span className="hand-badge" title="Mão: primeiro a receber as cartas">
+      mão
+    </span>
+  );
+}
+
 export function DealerBadge({ compact = false }: { compact?: boolean }) {
   return (
     <span className="dealer-badge" title="Dá as cartas">

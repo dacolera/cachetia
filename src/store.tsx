@@ -22,7 +22,7 @@ interface Store {
   updatePlayer(id: string, changes: Partial<Pick<Player, 'name' | 'photo' | 'archived'>>): void;
   startMatch(playerIds: string[], firstDealerId: string, cashierId: string): Match;
   addRound(matchId: string, winnerId: string, fled: string[]): void;
-  joinMatch(matchId: string, playerId: string, points: number, seatAfter?: string): void;
+  joinMatch(matchId: string, playerId: string, points: number): void;
   undo(matchId: string): void;
   deleteMatch(matchId: string): void;
   exportBackup(): Promise<Backup>;
@@ -102,10 +102,12 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         if (err) throw new Error(err);
         append(matchId, { type: 'round', id: uid(), at: now(), winnerId, fled });
       },
-      joinMatch(matchId, playerId, points, seatAfter) {
+      joinMatch(matchId, playerId, points) {
         const err = canJoin(computeState(findMatch(matchId)), playerId);
         if (err) throw new Error(err);
-        append(matchId, { type: 'join', id: uid(), at: now(), playerId, points, seatAfter });
+        // Senta logo antes de quem vai dar as cartas: a vez de dar e de ser mão segue igual.
+        const seatBefore = computeState(findMatch(matchId)).dealerId;
+        append(matchId, { type: 'join', id: uid(), at: now(), playerId, points, seatBefore });
       },
       undo(matchId) {
         const m = findMatch(matchId);

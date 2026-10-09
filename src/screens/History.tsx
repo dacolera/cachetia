@@ -50,7 +50,7 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
   const playerIds = final.standings.map((s) => s.playerId);
 
   // Uma linha por rodada, com a pontuação de cada um depois dela.
-  const rows: { label: string; dealerId?: string; winnerId?: string; fled: Set<string>; points: Map<string, number> }[] = [];
+  const rows: { label: string; dealerId?: string; handId?: string; winnerId?: string; fled: Set<string>; points: Map<string, number> }[] = [];
   const firstRound = match.events.findIndex((e) => e.type === 'round');
   const cuts = [firstRound === -1 ? match.events.length : firstRound];
   match.events.forEach((e, i) => e.type === 'round' && cuts.push(i + 1));
@@ -61,6 +61,7 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
     rows.push({
       label: st.roundsPlayed === 0 ? 'Início' : `Rodada ${st.roundsPlayed}`,
       dealerId: isRound ? st.dealers[st.dealers.length - 1] : undefined,
+      handId: isRound ? st.hands[st.hands.length - 1] : undefined,
       winnerId: isRound ? ev.winnerId : undefined,
       fled: new Set(isRound ? ev.fled : []),
       points: new Map(st.standings.map((s) => [s.playerId, s.points])),
@@ -98,7 +99,12 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
                 <tr key={i}>
                   <th>
                     {r.label}
-                    {r.dealerId && <small className="dealt"> ♠ {store.playerName(r.dealerId)}</small>}
+                    {r.dealerId && (
+                      <small className="dealt">
+                        ♠ {store.playerName(r.dealerId)}
+                        {r.handId && `, mão ${store.playerName(r.handId)}`}
+                      </small>
+                    )}
                   </th>
                   {playerIds.map((pid) => {
                     const pts = r.points.get(pid);

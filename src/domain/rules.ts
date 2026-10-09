@@ -15,31 +15,48 @@ export function computeState(match: Pick<Match, 'events' | 'firstDealerId'>): Ma
   // A ordem da lista é a ordem da mesa no sentido anti-horário, que é o sentido do jogo.
   const seats: string[] = [];
   const dealers: string[] = [];
+  const hands: string[] = [];
   let roundsPlayed = 0;
 
-  const nextDealer = () => {
-    const active = (id: string) => byId.get(id)!.points > 0;
-    if (dealers.length === 0) {
-      const first = match.firstDealerId;
-      return first && byId.has(first) && active(first) ? first : seats.find(active);
-    }
-    const from = seats.indexOf(dealers[dealers.length - 1]);
+  const active = (id: string) => byId.get(id)!.points > 0;
+  /** Próximo jogador ativo no sentido do jogo (à direita), a partir de `id`. */
+  const step = (id: string, dir: 1 | -1) => {
+    const from = seats.indexOf(id);
     for (let i = 1; i <= seats.length; i++) {
-      const id = seats[(from + i) % seats.length];
-      if (active(id)) return id;
+      const next = seats[(((from + dir * i) % seats.length) + seats.length) % seats.length];
+      if (active(next)) return next;
     }
     return undefined;
+  };
+
+  /**
+   * Ser mão (o primeiro a receber cartas, à direita de quem dá) é um direito que gira
+   * entre os jogadores; quem dá as cartas é consequência disso: o ativo logo antes do mão.
+   * Se o mão da rodada anterior saiu, o próximo continua tendo a vez de ser mão.
+   */
+  const nextTurn = (): { dealer?: string; hand?: string } => {
+    if (hands.length === 0) {
+      const first = match.firstDealerId;
+      const dealer = first && byId.has(first) && active(first) ? first : seats.find(active);
+      return { dealer, hand: dealer && step(dealer, 1) };
+    }
+    const hand = step(hands[hands.length - 1], 1);
+    return { hand, dealer: hand && step(hand, -1) };
   };
 
   for (const ev of match.events) {
     if (ev.type === 'join') {
       byId.set(ev.playerId, { playerId: ev.playerId, points: ev.points, joinedInRound: roundsPlayed });
+      const before = ev.seatBefore ? seats.indexOf(ev.seatBefore) : -1;
       const after = ev.seatAfter ? seats.indexOf(ev.seatAfter) : -1;
-      if (after === -1) seats.push(ev.playerId);
-      else seats.splice(after + 1, 0, ev.playerId);
+      if (before !== -1) seats.splice(before, 0, ev.playerId);
+      else if (after !== -1) seats.splice(after + 1, 0, ev.playerId);
+      else seats.push(ev.playerId);
       continue;
     }
-    dealers.push(nextDealer()!);
+    const turn = nextTurn();
+    dealers.push(turn.dealer!);
+    hands.push(turn.hand!);
     roundsPlayed++;
     const fled = new Set(ev.fled);
     for (const s of byId.values()) {
@@ -52,13 +69,16 @@ export function computeState(match: Pick<Match, 'events' | 'firstDealerId'>): Ma
   const standings = seats.map((id) => byId.get(id)!);
   const activeIds = standings.filter((s) => s.points > 0).map((s) => s.playerId);
   const finished = roundsPlayed > 0 && activeIds.length === 1;
+  const turn = finished ? {} : nextTurn();
   return {
     standings,
     roundsPlayed,
     activeIds,
     finished,
     dealers,
-    dealerId: finished ? undefined : nextDealer(),
+    hands,
+    dealerId: turn.dealer,
+    handId: turn.hand,
     winnerId: finished ? activeIds[0] : undefined,
   };
 }

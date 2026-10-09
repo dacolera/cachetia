@@ -446,3 +446,27 @@ input:focus { outline: 3px solid var(--gold); outline-offset: 1px; }
 .archived-tile .avatar { filter: grayscale(1); }
 .archived-tile .btn { min-height: 40px; font-size: 0.9rem; padding: 0 14px; }
 .archive-btn { justify-self: center; }
+
+/* Mão */
+.hand-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--paper);
+  color: var(--felt);
+  border: 2px solid var(--felt-3);
+  font-weight: 800;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.seat-slot .hand-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  font-size: calc(var(--cw) * 0.065);
+  padding: 2px 9px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.card.is-hand { box-shadow: 0 0 0 4px var(--felt-3), var(--shadow); }

@@ -81,32 +81,57 @@ describe('entrada no meio', () => {
   });
 });
 
-describe('quem dá as cartas', () => {
-  const dealers = (m: Match) => {
+describe('mão e quem dá as cartas', () => {
+  /** [quem deu, quem foi mão] por rodada, e o par da próxima rodada no fim. */
+  const turns = (m: Match) => {
     const st = computeState(m);
-    return [...st.dealers, st.dealerId];
+    const played = st.dealers.map((d, i) => `${d}>${st.hands[i]}`);
+    return st.finished ? played : [...played, `${st.dealerId}>${st.handId}`];
   };
 
-  it('começa com o escolhido e gira no sentido da mesa', () => {
+  it('mão é quem está à direita de quem dá, e a vez de ser mão gira pela mesa', () => {
     const m = { ...match(join('a'), join('b'), join('c'), round('a', ['b', 'c']), round('a', ['b', 'c']), round('a', ['b', 'c'])), firstDealerId: 'b' };
-    expect(dealers(m)).toEqual(['b', 'c', 'a', 'b']);
+    expect(turns(m)).toEqual(['b>c', 'c>a', 'a>b', 'b>c']);
   });
 
-  it('pula quem já saiu', () => {
-    const m = { ...match(join('a'), join('b', 2), join('c'), round('a')), firstDealerId: 'a' };
-    expect(dealers(m)).toEqual(['a', 'c']);
+  it('exemplo da família: o mão saiu, quem deu dá de novo para o próximo ser mão', () => {
+    // 1 deu, 2 foi mão e foi eliminado: 1 dá de novo e 3 é o mão.
+    const m = { ...match(join('j1'), join('j2', 2), join('j3'), round('j1')), firstDealerId: 'j1' };
+    expect(turns(m)).toEqual(['j1>j2', 'j1>j3']);
   });
 
-  it('quem senta logo depois de quem deu recebe o baralho', () => {
-    const m = { ...match(join('a'), join('b'), round('a', ['b']), { ...join('d', 9), seatAfter: 'a' } as MatchEvent), firstDealerId: 'a' };
-    expect(dealers(m)).toEqual(['a', 'd']);
+  it('se quem deu saiu, dá as cartas o ativo logo antes do próximo mão', () => {
+    const m = { ...match(join('a', 2), join('b'), join('c'), join('d'), round('b')), firstDealerId: 'a' };
+    expect(turns(m)).toEqual(['a>b', 'b>c']);
   });
 
-  it('sem escolha, começa pelo primeiro da mesa', () => {
-    expect(computeState(match(join('a'), join('b'))).dealerId).toBe('a');
+  it('pula quem já saiu na vez de ser mão', () => {
+    const m = { ...match(join('a'), join('b'), join('c', 2), join('d'), round('a'), round('a')), firstDealerId: 'a' };
+    // rodada 1: a deu, b mão; c saiu. rodada 2: mão seria c, vai para d, quem dá é b.
+    expect(turns(m)).toEqual(['a>b', 'b>d', 'd>a']);
   });
 
-  it('partida terminada não tem próximo a dar', () => {
-    expect(computeState({ ...match(join('a', 2), join('b', 2), round('a')), firstDealerId: 'b' }).dealerId).toBeUndefined();
+  it('quem entra senta antes de quem vai dar: a vez de dar e de ser mão não muda', () => {
+    // a deu, b foi mão; na rodada 2 b dá e c é mão. d entra antes de b.
+    const base = [join('a'), join('b'), join('c'), round('a', ['b', 'c'])];
+    const m = { ...match(...base, { ...join('d', 9), seatBefore: 'b' } as MatchEvent, round('a', ['b', 'c', 'd'])), firstDealerId: 'a' };
+    expect(computeState(m).standings.map((s) => s.playerId)).toEqual(['a', 'd', 'b', 'c']);
+    // rodada 2: b dá, c é mão; rodada 3: c dá, a é mão; d só é mão quando a vez chegar.
+    expect(turns(m)).toEqual(['a>b', 'b>c', 'c>a']);
+  });
+
+  it('partida antiga com o lugar no formato antigo continua abrindo', () => {
+    const m = match(join('a'), join('b'), round('a'), { ...join('d', 9), seatAfter: 'a' } as MatchEvent);
+    expect(computeState(m).standings.map((s) => s.playerId)).toEqual(['a', 'd', 'b']);
+  });
+
+  it('sem escolha, começa dando o primeiro da mesa', () => {
+    const st = computeState(match(join('a'), join('b')));
+    expect([st.dealerId, st.handId]).toEqual(['a', 'b']);
+  });
+
+  it('partida terminada não tem próxima vez', () => {
+    const st = computeState({ ...match(join('a', 2), join('b', 2), round('a')), firstDealerId: 'b' });
+    expect([st.dealerId, st.handId]).toEqual([undefined, undefined]);
   });
 });
