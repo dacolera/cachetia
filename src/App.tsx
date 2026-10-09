@@ -6,6 +6,8 @@ import { MatchScreen } from './screens/MatchScreen';
 import { NewMatch } from './screens/NewMatch';
 import { Players } from './screens/Players';
 import { Ranking } from './screens/Ranking';
+import { UpdateBanner } from './components/UpdateBanner';
+import type { Navigate } from './nav';
 import { useStore } from './store';
 
 export function App() {
@@ -18,6 +20,15 @@ export function App() {
 
   if (!loaded) return null;
 
+  return (
+    <>
+      <Screen route={route} go={go} />
+      <UpdateBanner />
+    </>
+  );
+}
+
+function Screen({ route, go }: { route: Route; go: Navigate }) {
   switch (route.name) {
     case 'home':
       return <Home go={go} />;
