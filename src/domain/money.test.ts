@@ -43,6 +43,25 @@ describe('pote e acerto', () => {
     expect(s.net).toEqual({ ana: 0, beto: -1000, caio: 1000 });
   });
 
+  it('pactos de grupos diferentes são independentes', () => {
+    const events = [join('ana', 2), join('beto', 1), join('caio', 2), join('davi', 1), pact('ana', 'beto'), round('ana', ['caio'])];
+    // Rodada 2: Caio e Davi fazem o próprio pacto, sem entrar no de Ana e Beto.
+    const later = [...events, pact('caio', 'davi')];
+    expect(partnersOf(match(...later), 'ana')).toEqual(['beto']);
+    expect(partnersOf(match(...later), 'caio')).toEqual(['davi']);
+  });
+
+  it('um pacto novo com alguém em comum não liga os outros entre si', () => {
+    // Ana e Beto livram; depois Beto e Caio livram. Ana e Caio não ficam ligados.
+    const events = [join('ana', 3), join('beto', 3), join('caio', 3), pact('ana', 'beto'), pact('beto', 'caio')];
+    expect(partnersOf(match(...events), 'ana')).toEqual(['beto']);
+    expect(partnersOf(match(...events), 'caio')).toEqual(['beto']);
+    expect(partnersOf(match(...events), 'beto').sort()).toEqual(['ana', 'caio']);
+    // Caio vence: devolve só ao Beto; a Ana perde o que casou.
+    const s = settle(match(...events, round('caio'), round('caio')))!;
+    expect(s.net).toEqual({ ana: -1000, beto: 0, caio: 1000 });
+  });
+
   it('o mesmo par em dois pactos devolve uma vez só', () => {
     const s = settle(match(join('ana', 2), join('beto', 2), join('caio', 2), pact('ana', 'beto'), pact('ana', 'beto', 'caio'), round('ana')))!;
     expect(s.net).toEqual({ ana: 0, beto: 0, caio: 0 });
