@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { validatePact } from './domain/money';
 import { START_POINTS, canJoin, computeState, lastUndoable, validateRound } from './domain/rules';
 import type { Match, MatchEvent, Player } from './domain/types';
 import { localRepository } from './storage/localRepository';
@@ -20,7 +21,8 @@ interface Store {
   player(id: string): Player | undefined;
   addPlayer(name: string, photo?: string): Player;
   updatePlayer(id: string, changes: Partial<Pick<Player, 'name' | 'photo' | 'archived'>>): void;
-  startMatch(playerIds: string[], firstDealerId: string, cashierId: string): Match;
+  startMatch(playerIds: string[], firstDealerId: string, cashierId: string, stakeCents: number): Match;
+  addPact(matchId: string, playerIds: string[]): void;
   addRound(matchId: string, winnerId: string, fled: string[]): void;
   joinMatch(matchId: string, playerId: string, points: number): void;
   undo(matchId: string): void;
@@ -85,13 +87,14 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         setPlayers((list) => list.map((x) => (x.id === id ? next : x)));
         void repo.savePlayer(next);
       },
-      startMatch(playerIds, firstDealerId, cashierId) {
+      startMatch(playerIds, firstDealerId, cashierId, stakeCents) {
         const at = now();
         const m: Match = {
           id: uid(),
           createdAt: at,
           firstDealerId,
           cashierId,
+          stakeCents,
           events: playerIds.map((playerId) => ({ type: 'join', id: uid(), at, playerId, points: START_POINTS })),
         };
         putMatch(m);
@@ -101,6 +104,12 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         const err = validateRound(computeState(findMatch(matchId)), { winnerId, fled });
         if (err) throw new Error(err);
         append(matchId, { type: 'round', id: uid(), at: now(), winnerId, fled });
+      },
+      addPact(matchId, playerIds) {
+        const m = findMatch(matchId);
+        const err = validatePact(m, computeState(m), playerIds);
+        if (err) throw new Error(err);
+        append(matchId, { type: 'pact', id: uid(), at: now(), playerIds });
       },
       joinMatch(matchId, playerId, points) {
         const err = canJoin(computeState(findMatch(matchId)), playerId);

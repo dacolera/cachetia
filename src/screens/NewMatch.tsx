@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { PlayerForm } from '../components/PlayerForm';
 import { DealerBadge, TopBar } from '../components/ui';
+import { DEFAULT_STAKE_CENTS, formatMoney, parseMoney } from '../domain/money';
 import { MAX_PLAYERS, MIN_PLAYERS, computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
 import { useStore } from '../store';
+
+const STAKE_OPTIONS = [500, 1000, 2000, 5000];
 
 /** Partidas terminadas há menos que isso contam como "do mesmo dia" para definir quem dá as cartas. */
 const SAME_SESSION_MS = 12 * 60 * 60 * 1000;
@@ -28,6 +31,8 @@ export function NewMatch({ go }: { go: Navigate }) {
   const [dealer, setDealer] = useState<string | null>(lastWinner ?? null);
   const [cashier, setCashier] = useState<string | null>(last?.cashierId ?? null);
   const [creating, setCreating] = useState(false);
+  const [stake, setStake] = useState(last?.stakeCents ?? DEFAULT_STAKE_CENTS);
+  const [customStake, setCustomStake] = useState('');
 
   const full = selected.length >= MAX_PLAYERS;
   const players = store.players.filter((p) => !p.archived).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -121,17 +126,51 @@ export function NewMatch({ go }: { go: Navigate }) {
         </section>
       )}
 
+      {selected.length > 0 && (
+        <section className="panel">
+          <h2>Quanto cada um casa?</h2>
+          <div className="chips">
+            {STAKE_OPTIONS.map((v) => (
+              <button
+                key={v}
+                className={stake === v && !customStake ? 'chip on' : 'chip'}
+                onClick={() => {
+                  setStake(v);
+                  setCustomStake('');
+                }}
+              >
+                {formatMoney(v)}
+              </button>
+            ))}
+            <input
+              className="stake-input"
+              inputMode="decimal"
+              placeholder="Outro valor"
+              value={customStake}
+              onChange={(e) => {
+                setCustomStake(e.target.value);
+                const cents = parseMoney(e.target.value);
+                if (cents) setStake(cents);
+              }}
+            />
+          </div>
+          <p className="muted">
+            {formatMoney(stake)} cada · pote de {formatMoney(stake * selected.length)}. Quem entrar no meio casa o mesmo valor.
+          </p>
+        </section>
+      )}
+
       <div className="bottombar">
         <button
           className="btn primary big"
           disabled={selected.length < MIN_PLAYERS || !dealerOk}
-          onClick={() => go({ name: 'match', id: store.startMatch(selected, dealer!, cashierId).id })}
+          onClick={() => go({ name: 'match', id: store.startMatch(selected, dealer!, cashierId, stake).id })}
         >
           {selected.length < MIN_PLAYERS
             ? `Escolha pelo menos ${MIN_PLAYERS}`
             : !dealerOk
               ? 'Escolha quem dá as cartas'
-              : `Começar com ${selected.length} jogadores`}
+              : `Começar com ${selected.length} jogadores · pote ${formatMoney(stake * selected.length)}`}
         </button>
       </div>
       {creating && <PlayerForm onClose={() => setCreating(false)} onSaved={(p) => include(p.id)} />}

@@ -30,7 +30,18 @@ export interface RoundEvent {
   fled: string[];
 }
 
-export type MatchEvent = JoinEvent | RoundEvent;
+/**
+ * "Livrar": jogadores ainda na mesa combinam proteção mútua. Se um deles vencer a
+ * partida, devolve o valor casado a cada um com quem livrou. Pactos podem se sobrepor.
+ */
+export interface PactEvent {
+  type: 'pact';
+  id: string;
+  at: string;
+  playerIds: string[];
+}
+
+export type MatchEvent = JoinEvent | RoundEvent | PactEvent;
 
 /**
  * A partida guarda só a sequência de eventos; placar, eliminações e vencedor
@@ -44,6 +55,8 @@ export interface Match {
   firstDealerId?: string;
   /** Quem opera o tablet; fica sempre sentado embaixo, no centro da mesa. */
   cashierId?: string;
+  /** Quanto cada jogador casa, em centavos. Partidas antigas não têm. */
+  stakeCents?: number;
   finishedAt?: string;
   events: MatchEvent[];
 }

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Modal, TopBar } from '../components/ui';
+import { SettlementView } from '../components/SettlementView';
+import { formatMoney, pacts, pot, settle } from '../domain/money';
 import { computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
 import { formatDate, useStore } from '../store';
@@ -23,6 +25,7 @@ export function History({ go }: { go: Navigate }) {
                 </span>
                 <span className="muted">
                   {formatDate(m.createdAt)} · {st.standings.length} jogadores · {st.roundsPlayed} rodada(s)
+                  {pot(m) !== undefined && ` · pote ${formatMoney(pot(m)!)}`}
                 </span>
               </button>
             </li>
@@ -128,6 +131,26 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
           </tbody>
         </table>
       </div>
+
+      {pacts(match).length > 0 && (
+        <section className="panel detail-section">
+          <h2>🤝 Livramentos</h2>
+          <ul>
+            {pacts(match).map((p, i) => (
+              <li key={i}>
+                Rodada {p.round}: {p.playerIds.map((id) => store.playerName(id)).join(', ')}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {match.finishedAt && settle(match) && (
+        <section className="panel detail-section paper">
+          <h2>💰 Acerto</h2>
+          <SettlementView match={match} />
+        </section>
+      )}
 
       {confirmDelete && (
         <Modal

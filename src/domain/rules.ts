@@ -45,6 +45,7 @@ export function computeState(match: Pick<Match, 'events' | 'firstDealerId'>): Ma
   };
 
   for (const ev of match.events) {
+    if (ev.type === 'pact') continue;
     if (ev.type === 'join') {
       byId.set(ev.playerId, { playerId: ev.playerId, points: ev.points, joinedInRound: roundsPlayed });
       const before = ev.seatBefore ? seats.indexOf(ev.seatBefore) : -1;
@@ -126,10 +127,10 @@ export function previewRound(state: MatchState, outcomes: Record<string, RoundOu
   return out;
 }
 
-/** Só rodadas e entradas no meio da partida podem ser desfeitas; a formação inicial da mesa não. */
+/** Rodadas, livramentos e entradas no meio podem ser desfeitos; a formação inicial da mesa não. */
 export function lastUndoable(match: Match): MatchEvent | undefined {
   const last = match.events[match.events.length - 1];
   if (!last) return undefined;
-  if (last.type === 'round') return last;
+  if (last.type === 'round' || last.type === 'pact') return last;
   return match.events.some((e) => e.type === 'round') ? last : undefined;
 }
