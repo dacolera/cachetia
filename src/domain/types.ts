@@ -15,7 +15,9 @@ export interface JoinEvent {
   at: string;
   playerId: string;
   points: number;
-  /** Lugar na mesa: senta logo depois deste jogador. Sem ele, vai pro fim da roda. */
+  /** Quem entra no meio senta logo antes de quem vai dar as cartas naquela rodada. */
+  seatBefore?: string;
+  /** Formato antigo: sentava logo depois deste jogador. Mantido para ler partidas já salvas. */
   seatAfter?: string;
 }
 

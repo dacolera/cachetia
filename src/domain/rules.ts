@@ -47,9 +47,11 @@ export function computeState(match: Pick<Match, 'events' | 'firstDealerId'>): Ma
   for (const ev of match.events) {
     if (ev.type === 'join') {
       byId.set(ev.playerId, { playerId: ev.playerId, points: ev.points, joinedInRound: roundsPlayed });
+      const before = ev.seatBefore ? seats.indexOf(ev.seatBefore) : -1;
       const after = ev.seatAfter ? seats.indexOf(ev.seatAfter) : -1;
-      if (after === -1) seats.push(ev.playerId);
-      else seats.splice(after + 1, 0, ev.playerId);
+      if (before !== -1) seats.splice(before, 0, ev.playerId);
+      else if (after !== -1) seats.splice(after + 1, 0, ev.playerId);
+      else seats.push(ev.playerId);
       continue;
     }
     const turn = nextTurn();

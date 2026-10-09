@@ -230,12 +230,10 @@ function JoinModal({ matchId, points, onClose }: { matchId: string; points: numb
   const state = computeState(match);
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [seatAfter, setSeatAfter] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const available = store.players.filter((p) => !p.archived && canJoin(state, p.id) === null).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   const typed = name.trim();
-  const seated = state.standings.filter((s) => s.points > 0);
 
   function confirm() {
     let pid = selected;
@@ -245,8 +243,8 @@ function JoinModal({ matchId, points, onClose }: { matchId: string; points: numb
       if (existing?.archived) store.updatePlayer(existing.id, { archived: false });
       pid = (existing ?? store.addPlayer(typed)).id;
     }
-    if (!pid || !seatAfter) return;
-    store.joinMatch(matchId, pid, points, seatAfter);
+    if (!pid) return;
+    store.joinMatch(matchId, pid, points);
     onClose();
   }
 
@@ -259,7 +257,7 @@ function JoinModal({ matchId, points, onClose }: { matchId: string; points: numb
           <button className="btn" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn primary" disabled={(!selected && !typed) || !seatAfter} onClick={confirm}>
+          <button className="btn primary" disabled={!selected && !typed} onClick={confirm}>
             Entrar com {points} ponto(s)
           </button>
         </>
@@ -292,15 +290,11 @@ function JoinModal({ matchId, points, onClose }: { matchId: string; points: numb
         maxLength={20}
       />
 
-      <h3>Senta depois de quem?</h3>
-      <div className="chips">
-        {seated.map((s) => (
-          <button key={s.playerId} className={seatAfter === s.playerId ? 'chip on' : 'chip'} onClick={() => setSeatAfter(s.playerId)}>
-            {store.playerName(s.playerId)}
-          </button>
-        ))}
-      </div>
-
+      {state.dealerId && (
+        <p>
+          Senta logo antes de <strong>{store.playerName(state.dealerId)}</strong>, que vai dar as cartas nesta rodada.
+        </p>
+      )}
       <p>
         Entra com <strong>{points}</strong> ponto(s), como se tivesse fugido das {state.roundsPlayed} rodada(s) anteriores.
       </p>
