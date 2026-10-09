@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Route } from './nav';
+import { Cash } from './screens/Cash';
 import { History, MatchDetail } from './screens/History';
 import { Home } from './screens/Home';
 import { MatchScreen } from './screens/MatchScreen';
@@ -44,5 +45,7 @@ function Screen({ route, go }: { route: Route; go: Navigate }) {
       return <Ranking go={go} />;
     case 'players':
       return <Players go={go} />;
+    case 'cash':
+      return <Cash go={go} />;
   }
 }

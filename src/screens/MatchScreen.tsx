@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { PokerTable } from '../components/PokerTable';
 import { SettlementView } from '../components/SettlementView';
+import { StakeModal } from '../components/CashModals';
+import { PayoutPanel } from '../components/PayoutPanel';
+import { missingStakes } from '../domain/ledger';
 import { formatMoney, pacts, partnersOf, pot, validatePact } from '../domain/money';
 import { fromCashier } from '../components/tableLayout';
 import { DealerBadge, HandBadge, Modal, Pips, TopBar } from '../components/ui';
@@ -20,6 +23,7 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
   const [outcomes, setOutcomes] = useState<Record<string, RoundOutcome> | null>(null);
   const [joining, setJoining] = useState(false);
   const [livrando, setLivrando] = useState(false);
+  const [staking, setStaking] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   if (!match || !state) {
@@ -36,6 +40,9 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
   const undoable = lastUndoable(match);
   const potCents = pot(match);
   const inPact = new Set(pacts(match).flatMap((p) => p.playerIds));
+  const missing = missingStakes(match, store.ledger);
+  const seatedCount = state.standings.length;
+  const needsPayout = state.finished && match.stakeCents !== undefined && !match.paidOutAt;
 
 
   function startRound() {
@@ -86,7 +93,12 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
               ♠ <em>♥</em> ♣ <em>♦</em>
             </span>
             <strong className="center-round">{state.finished ? 'Fim de jogo' : `Rodada ${state.roundsPlayed + 1}`}</strong>
-            {potCents !== undefined && <span className="center-pot">Pote {formatMoney(potCents)}</span>}
+            {potCents !== undefined && (
+              <span className="center-pot">
+                Pote {formatMoney(potCents)}
+                {missing.length > 0 && ` · casaram ${seatedCount - missing.length} de ${seatedCount}`}
+              </span>
+            )}
             {inRound ? (
               <>
                 <span className="center-hint">{winnerId ? 'Marque quem fugiu. Os demais jogaram e perdem 2.' : 'Quem ganhou a rodada?'}</span>
@@ -111,9 +123,18 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
                       )}
                     </span>
                   )}
-                  <button className="btn primary center-btn" onClick={startRound}>
-                    Lançar rodada
-                  </button>
+                  {missing.length > 0 ? (
+                    <>
+                      <span className="center-hint">Falta casar: {missing.map((id) => store.playerName(id)).join(', ')}</span>
+                      <button className="btn primary center-btn" onClick={() => setStaking(missing[0])}>
+                        💵 Casar: {store.playerName(missing[0])}
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn primary center-btn" onClick={startRound}>
+                      Lançar rodada
+                    </button>
+                  )}
                   {state.activeIds.length >= 2 && (
                     <button className="btn ghost center-cancel" onClick={() => setLivrando(true)}>
                       🤝 Livrar
@@ -155,6 +176,11 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
                 {eliminated && <span className="card-status">Fora na rodada {s.eliminatedInRound}</span>}
                 {!eliminated && !inRound && s.joinedInRound > 0 && <span className="tag">entrou na {s.joinedInRound + 1}ª</span>}
                 {!inRound && inPact.has(s.playerId) && <span className="tag pact-tag">🤝 livrando</span>}
+                {missing.includes(s.playerId) && (
+                  <button className="tag stake-tag" onClick={() => setStaking(s.playerId)}>
+                    💵 casar
+                  </button>
+                )}
 
                 {inRound && !eliminated && (
                   <div className="seg">
@@ -187,7 +213,7 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
               <button className="btn" onClick={() => go({ name: 'home' })}>
                 Início
               </button>
-              <button className="btn primary" onClick={() => go({ name: 'new' })}>
+              <button className="btn primary" disabled={needsPayout} onClick={() => go({ name: 'new' })}>
                 Próxima partida
               </button>
             </>
@@ -204,8 +230,11 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
             </span>
           </div>
           <SettlementView match={match} />
+          {match.stakeCents !== undefined && <PayoutPanel match={match} />}
         </Modal>
       )}
+
+      {staking && <StakeModal matchId={match.id} playerId={staking} onClose={() => setStaking(null)} />}
 
       {livrando && <PactModal matchId={match.id} onClose={() => setLivrando(false)} />}
 

@@ -1,3 +1,4 @@
+import type { LedgerEntry } from '../domain/ledger';
 import type { Match, Player } from '../domain/types';
 import type { Backup, Repository } from './repository';
 
@@ -6,16 +7,20 @@ const KEY = 'cacheta:v1';
 interface Data {
   players: Player[];
   matches: Match[];
+  ledger: LedgerEntry[];
 }
 
 function load(): Data {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as Data;
+    if (raw) {
+      const data = JSON.parse(raw) as Partial<Data>;
+      return { players: data.players ?? [], matches: data.matches ?? [], ledger: data.ledger ?? [] };
+    }
   } catch {
     // dado corrompido ou storage indisponível: começa vazio
   }
-  return { players: [], matches: [] };
+  return { players: [], matches: [], ledger: [] };
 }
 
 function persist(data: Data) {
@@ -49,6 +54,18 @@ export const localRepository: Repository = {
     const data = load();
     persist({ ...data, matches: data.matches.filter((m) => m.id !== id) });
   },
+  async listLedger() {
+    return load().ledger;
+  },
+  async addLedger(entries) {
+    const data = load();
+    persist({ ...data, ledger: [...data.ledger, ...entries] });
+  },
+  async removeLedger(ids) {
+    const data = load();
+    const drop = new Set(ids);
+    persist({ ...data, ledger: data.ledger.filter((e) => !drop.has(e.id)) });
+  },
   async exportAll(): Promise<Backup> {
     const data = load();
     return { version: 1, exportedAt: new Date().toISOString(), ...data };
@@ -57,6 +74,6 @@ export const localRepository: Repository = {
     if (backup?.version !== 1 || !Array.isArray(backup.players) || !Array.isArray(backup.matches)) {
       throw new Error('Arquivo de backup inválido.');
     }
-    persist({ players: backup.players, matches: backup.matches });
+    persist({ players: backup.players, matches: backup.matches, ledger: backup.ledger ?? [] });
   },
 };

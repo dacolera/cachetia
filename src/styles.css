@@ -519,3 +519,28 @@ input:focus { outline: 3px solid var(--gold); outline-offset: 1px; }
 .modal:has(.settlement) .victory strong { font-size: 1.8rem; align-self: end; }
 .modal:has(.settlement) .victory .muted { align-self: start; }
 .settlement-list { grid-template-columns: 1fr 1fr; column-gap: 24px; }
+
+/* Caixa */
+.tag.stake-tag { font: inherit; border: 0; background: var(--red); color: #fff; font-weight: 800; cursor: pointer; padding: 4px 10px; font-size: calc(var(--cw) * 0.075); }
+.cash-who { display: flex; align-items: center; gap: 14px; }
+.cash-who > div { display: grid; }
+.cash-who strong { font-size: 1.3rem; }
+.cash-preview { color: var(--win) !important; font-weight: 700; }
+.payout { display: grid; gap: 10px; border-top: 1px solid #e8e2d2; padding-top: 14px; }
+.payout h3 { margin: 0; font-size: 1.1rem; }
+.payout.paid p:first-child { color: var(--win); }
+.payout-cash { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+.payout-cash input { max-width: 200px; }
+.cash-total { display: grid; justify-items: center; text-align: center; gap: 4px; margin-bottom: 16px; }
+.cash-total strong { font-size: 2.6rem; color: var(--gold); }
+.cash-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.2); }
+.cash-row-who { font: inherit; display: flex; align-items: center; gap: 12px; background: none; border: 0; color: var(--paper); cursor: pointer; text-align: left; min-width: 0; }
+.cash-row-who > span { display: grid; }
+.cash-row-who strong { font-size: 1.15rem; }
+.cash-row-actions { display: flex; gap: 8px; }
+.cash-row .money-pos { color: #7fdc9f; font-weight: 700; }
+.statement { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow: auto; }
+.statement li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee6d4; }
+.statement li > span:first-child { display: grid; }
+.statement-undo { min-height: 36px; padding: 0 10px; font-size: 0.85rem; }
+.tile-credit { font-size: 0.85rem; font-weight: 700; color: #7fdc9f; }
