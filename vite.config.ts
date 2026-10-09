@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // O app avisa que há versão nova e só recarrega quando a pessoa toca em Atualizar,
+      // para não perder um lançamento de rodada pela metade.
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Cacheta da Família',
