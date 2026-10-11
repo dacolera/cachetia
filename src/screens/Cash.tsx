@@ -94,7 +94,7 @@ export function Cash({ go }: { go: Navigate }) {
 
       {showDay && <EventCashModal onClose={() => setShowDay(false)} />}
       {eventDialog === 'start' && <StartEventModal onClose={() => setEventDialog(null)} />}
-      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} />}
+      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} onOpenMatch={(id) => go({ name: 'match', id })} />}
       {eventDialog === 'list' && <EventsListModal onClose={() => setEventDialog(null)} />}
       {dialog?.kind === 'deposit' && <DepositModal playerId={dialog.playerId} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'withdraw' && <WithdrawModal playerId={dialog.playerId} onClose={() => setDialog(null)} />}

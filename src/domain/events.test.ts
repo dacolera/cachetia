@@ -57,7 +57,17 @@ describe('eventos', () => {
     const ledger = [entry('a', 'deposit', 3000, 12.1, { eventId: 'e2' }), entry('b', 'deposit', 1000, 12.2, { eventId: 'e2' }), entry('b', 'withdraw', 1000, 12.3, { eventId: 'e2' })];
     const ok = closePlan(ledger, [match('m2', 12.5, { eventId: 'e2', finishedAt: h(13) })], events, e2);
     expect(ok).toEqual({ blockers: [], payouts: [{ playerId: 'a', cents: 3000 }], totalCents: 3000 });
-    const busy = closePlan(ledger, [match('m2', 12.5, { eventId: 'e2' }), match('m3', 13, { eventId: 'e2', finishedAt: h(14), stakeCents: 1000 })], events, e2);
-    expect(busy.blockers).toHaveLength(2);
+    const staked = [...ledger, entry('a', 'stake', 1000, 13.1, { eventId: 'e2', matchId: 'm3' })];
+    const busy = closePlan(staked, [match('m2', 12.5, { eventId: 'e2' }), match('m3', 13, { eventId: 'e2', finishedAt: h(14), stakeCents: 1000 })], events, e2);
+    expect(busy.blockers).toEqual([
+      { matchId: 'm2', number: 1, reason: 'ongoing' },
+      { matchId: 'm3', number: 2, reason: 'unpaid' },
+    ]);
+  });
+
+  it('partida de antes do caixa, com valor mas sem ninguém ter casado pelo app, não trava o encerramento', () => {
+    const legacy = match('old', 1, { finishedAt: h(2), stakeCents: 500 });
+    const plan = closePlan([], [legacy], [{ id: 'e1', name: 'Evento 1', startedAt: h(0) }], { id: 'e1', name: 'Evento 1', startedAt: h(0) });
+    expect(plan.blockers).toEqual([]);
   });
 });

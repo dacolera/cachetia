@@ -51,6 +51,11 @@ export function openPots(ledger: LedgerEntry[], matches: Match[]): number {
   return ledger.reduce((sum, e) => (e.kind === 'stake' && e.matchId && !paid.has(e.matchId) ? sum + e.amountCents : sum), 0);
 }
 
+/** A partida tem pote no caixa: alguém casou por ele. Partidas de antes do caixa não têm o que pagar. */
+export function hasPot(ledger: LedgerEntry[], match: Match): boolean {
+  return match.stakeCents !== undefined && ledger.some((e) => e.kind === 'stake' && e.matchId === match.id);
+}
+
 export function hasStaked(ledger: LedgerEntry[], matchId: string, playerId: string): boolean {
   return ledger.some((e) => e.kind === 'stake' && e.matchId === matchId && e.playerId === playerId);
 }

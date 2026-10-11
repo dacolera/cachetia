@@ -143,7 +143,7 @@ export function Home({ go }: { go: Navigate }) {
       {(eventDialog === 'start' || eventDialog === 'start-then-new') && (
         <StartEventModal onClose={() => setEventDialog(null)} onStarted={() => eventDialog === 'start-then-new' && go({ name: 'new' })} />
       )}
-      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} />}
+      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} onOpenMatch={(id) => go({ name: 'match', id })} />}
       {eventDialog === 'list' && <EventsListModal onClose={() => setEventDialog(null)} />}
 
       {confirmNew && ongoing && (

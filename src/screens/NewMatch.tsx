@@ -3,7 +3,6 @@ import { Avatar } from '../components/Avatar';
 import { PlayerForm } from '../components/PlayerForm';
 import { DealerBadge, TopBar } from '../components/ui';
 import { balanceOf } from '../domain/ledger';
-import { eventIdOf } from '../domain/events';
 import { DEFAULT_STAKE_CENTS, formatMoney, isValidStake, parseMoney } from '../domain/money';
 import { MAX_PLAYERS, MIN_PLAYERS, computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
@@ -14,7 +13,11 @@ const STAKE_OPTIONS = [1000, 2000, 5000, 10000];
 
 export function NewMatch({ go }: { go: Navigate }) {
   const store = useStore();
-  const last = [...store.matches].filter((m) => m.finishedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  // Só a última partida jogada neste evento serve de referência. Partidas de antes dos eventos (sem
+  // marcação) ou de outro evento não ditam a mesa: na primeira do evento a ordem e quem dá as cartas são livres.
+  const last = [...store.matches]
+    .filter((m) => m.finishedAt && !!store.currentEvent && m.eventId === store.currentEvent.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const lastState = last && computeState(last);
   // A próxima partida começa com a mesa da anterior, cada um no mesmo lugar.
   const lastSeats = lastState
@@ -23,9 +26,8 @@ export function NewMatch({ go }: { go: Navigate }) {
         .filter((id) => !store.player(id)?.archived)
         .slice(0, MAX_PLAYERS)
     : [];
-  // Quem ganhou a última partida do evento começa dando as cartas; na primeira do evento, a escolha é livre.
-  const sameEvent = !!last && !!store.currentEvent && eventIdOf(last, store.events) === store.currentEvent.id;
-  const lastWinner = sameEvent ? lastState?.winnerId : undefined;
+  // Quem ganhou a última partida do evento começa dando as cartas.
+  const lastWinner = lastState?.winnerId;
 
   const [selected, setSelected] = useState<string[]>(lastSeats);
   const [dealer, setDealer] = useState<string | null>(lastWinner ?? null);
@@ -33,6 +35,8 @@ export function NewMatch({ go }: { go: Navigate }) {
   const [creating, setCreating] = useState(false);
   const [stake, setStake] = useState(last?.stakeCents && isValidStake(last.stakeCents) ? last.stakeCents : DEFAULT_STAKE_CENTS);
   const [customStake, setCustomStake] = useState('');
+  /** A mesa mudou: quem volta não senta mais no lugar da partida anterior, a ordem é a dos toques. */
+  const [reseat, setReseat] = useState(false);
 
   const full = selected.length >= MAX_PLAYERS;
   const players = store.players.filter((p) => !p.archived).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -44,7 +48,7 @@ export function NewMatch({ go }: { go: Navigate }) {
     setSelected((s) => {
       if (s.includes(id) || s.length >= MAX_PLAYERS) return s;
       // Quem já estava na mesa anterior volta pro mesmo lugar, não pro fim.
-      const seat = lastSeats.indexOf(id);
+      const seat = reseat ? -1 : lastSeats.indexOf(id);
       if (seat === -1) return [...s, id];
       const before = s.findIndex((x) => {
         const xs = lastSeats.indexOf(x);
@@ -72,11 +76,22 @@ export function NewMatch({ go }: { go: Navigate }) {
       <section className="panel">
         <h2>Quem vai jogar?</h2>
         <p className="muted">
-          {lastSeats.length > 0
+          {lastSeats.length > 0 && !reseat
             ? 'Mesma mesa da última partida. Toque para tirar ou incluir alguém; quem volta senta no lugar de antes.'
             : 'Toque nos jogadores seguindo a mesa no sentido anti-horário.'}{' '}
           {selected.length} de {MAX_PLAYERS}.
         </p>
+        {lastSeats.length > 0 && !reseat && (
+          <button
+            className="btn ghost"
+            onClick={() => {
+              setReseat(true);
+              setSelected([]);
+            }}
+          >
+            Mudaram de lugar? Montar a mesa de novo
+          </button>
+        )}
 
         <div className="player-grid">
           {players.map((p) => {
@@ -103,7 +118,9 @@ export function NewMatch({ go }: { go: Navigate }) {
           <p className="muted">
             {lastWinner && selected.includes(lastWinner)
               ? `${store.playerName(lastWinner)} ganhou a última partida e começa dando as cartas.`
-              : 'Primeira partida do dia: toque em quem começa dando as cartas.'}{' '}
+              : last
+                ? 'Toque em quem começa dando as cartas.'
+                : 'Primeira partida do evento: toque em quem começa dando as cartas.'}{' '}
             O baralho gira no sentido anti-horário, na ordem abaixo.
           </p>
           <ol className="seats">
