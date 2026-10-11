@@ -1,5 +1,5 @@
 import type { LedgerEntry } from '../domain/ledger';
-import type { Match, Player } from '../domain/types';
+import type { GameEvent, Match, Player } from '../domain/types';
 
 /**
  * Contrato de persistência. Hoje a implementação é local (no próprio tablet);
@@ -14,6 +14,8 @@ export interface Repository {
   listLedger(): Promise<LedgerEntry[]>;
   addLedger(entries: LedgerEntry[]): Promise<void>;
   removeLedger(ids: string[]): Promise<void>;
+  listEvents(): Promise<GameEvent[]>;
+  saveEvent(event: GameEvent): Promise<void>;
   exportAll(): Promise<Backup>;
   importAll(backup: Backup): Promise<void>;
 }
@@ -25,4 +27,6 @@ export interface Backup {
   matches: Match[];
   /** Movimentos do caixa. Backups antigos não têm. */
   ledger?: LedgerEntry[];
+  /** Eventos. Backups antigos não têm. */
+  events?: GameEvent[];
 }

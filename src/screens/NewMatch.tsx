@@ -3,15 +3,14 @@ import { Avatar } from '../components/Avatar';
 import { PlayerForm } from '../components/PlayerForm';
 import { DealerBadge, TopBar } from '../components/ui';
 import { balanceOf } from '../domain/ledger';
-import { DEFAULT_STAKE_CENTS, formatMoney, parseMoney } from '../domain/money';
+import { eventIdOf } from '../domain/events';
+import { DEFAULT_STAKE_CENTS, formatMoney, isValidStake, parseMoney } from '../domain/money';
 import { MAX_PLAYERS, MIN_PLAYERS, computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
 import { useStore } from '../store';
 
-const STAKE_OPTIONS = [500, 1000, 2000, 5000];
+const STAKE_OPTIONS = [1000, 2000, 5000, 10000];
 
-/** Partidas terminadas há menos que isso contam como "do mesmo dia" para definir quem dá as cartas. */
-const SAME_SESSION_MS = 12 * 60 * 60 * 1000;
 
 export function NewMatch({ go }: { go: Navigate }) {
   const store = useStore();
@@ -24,15 +23,15 @@ export function NewMatch({ go }: { go: Navigate }) {
         .filter((id) => !store.player(id)?.archived)
         .slice(0, MAX_PLAYERS)
     : [];
-  const sameSession = !!last?.finishedAt && Date.now() - new Date(last.finishedAt).getTime() < SAME_SESSION_MS;
-  // Quem ganhou a última partida começa dando as cartas; na primeira do dia, a escolha é livre.
-  const lastWinner = sameSession ? lastState?.winnerId : undefined;
+  // Quem ganhou a última partida do evento começa dando as cartas; na primeira do evento, a escolha é livre.
+  const sameEvent = !!last && !!store.currentEvent && eventIdOf(last, store.events) === store.currentEvent.id;
+  const lastWinner = sameEvent ? lastState?.winnerId : undefined;
 
   const [selected, setSelected] = useState<string[]>(lastSeats);
   const [dealer, setDealer] = useState<string | null>(lastWinner ?? null);
   const [cashier, setCashier] = useState<string | null>(last?.cashierId ?? null);
   const [creating, setCreating] = useState(false);
-  const [stake, setStake] = useState(last?.stakeCents ?? DEFAULT_STAKE_CENTS);
+  const [stake, setStake] = useState(last?.stakeCents && isValidStake(last.stakeCents) ? last.stakeCents : DEFAULT_STAKE_CENTS);
   const [customStake, setCustomStake] = useState('');
 
   const full = selected.length >= MAX_PLAYERS;
@@ -64,6 +63,11 @@ export function NewMatch({ go }: { go: Navigate }) {
   return (
     <main className="screen">
       <TopBar title="Nova partida" onBack={() => go({ name: 'home' })} />
+      {!store.currentEvent && (
+        <section className="panel">
+          <p className="error">Nenhum evento aberto. Abra um evento na tela inicial para começar a partida.</p>
+        </section>
+      )}
 
       <section className="panel">
         <h2>Quem vai jogar?</h2>
@@ -152,10 +156,11 @@ export function NewMatch({ go }: { go: Navigate }) {
               onChange={(e) => {
                 setCustomStake(e.target.value);
                 const cents = parseMoney(e.target.value);
-                if (cents) setStake(cents);
+                if (cents && isValidStake(cents)) setStake(cents);
               }}
             />
           </div>
+          {customStake && !isValidStake(parseMoney(customStake) ?? 0) && <p className="error">O valor precisa ser múltiplo de R$ 10,00.</p>}
           <p className="muted">
             {formatMoney(stake)} cada · pote de {formatMoney(stake * selected.length)}. Quem entrar no meio casa o mesmo valor.
           </p>
@@ -165,7 +170,7 @@ export function NewMatch({ go }: { go: Navigate }) {
       <div className="bottombar">
         <button
           className="btn primary big"
-          disabled={selected.length < MIN_PLAYERS || !dealerOk}
+          disabled={!store.currentEvent || selected.length < MIN_PLAYERS || !dealerOk || (!!customStake && !isValidStake(parseMoney(customStake) ?? 0))}
           onClick={() => go({ name: 'match', id: store.startMatch(selected, dealer!, cashierId, stake).id })}
         >
           {selected.length < MIN_PLAYERS

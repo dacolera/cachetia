@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
-import { START_POINTS } from '../domain/rules';
 
-export function Pips({ points }: { points: number }) {
+/** Placar do jogador na partida: vitórias, corridas e derrotas. */
+export function Tally({ wins, fled, lost }: { wins: number; fled: number; lost: number }) {
   return (
-    <div className="pips" aria-hidden>
-      {Array.from({ length: Math.max(START_POINTS, points) }, (_, i) => (
-        <span key={i} className={i < points ? 'pip on' : 'pip'} />
-      ))}
+    <div className="tally" aria-label={`${wins} vitória(s), ${fled} corrida(s), ${lost} derrota(s)`}>
+      <span title="Vitórias">🏆<small>{wins}</small></span>
+      <span title="Corridas">🏃<small>{fled}</small></span>
+      <span title="Derrotas">💀<small>{lost}</small></span>
     </div>
   );
 }
