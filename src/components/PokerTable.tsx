@@ -5,6 +5,8 @@ interface Props {
   /** Uma cadeira por item, já na ordem da mesa começando pelo caixa. */
   seats: { key: string; content: ReactNode }[];
   center?: ReactNode;
+  /** Fica no canto superior direito da sala, fora da mesa. */
+  corner?: ReactNode;
 }
 
 const SUITS = [
@@ -14,7 +16,7 @@ const SUITS = [
   { s: '♦', red: true },
 ];
 
-export function PokerTable({ seats, center }: Props) {
+export function PokerTable({ seats, center, corner }: Props) {
   const roomRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -36,6 +38,7 @@ export function PokerTable({ seats, center }: Props) {
 
   return (
     <div className="room" ref={roomRef} style={{ '--cw': `${cardW}px` } as CSSProperties}>
+      {corner && <div className="room-corner">{corner}</div>}
       {w > 0 && (
         <>
           <div className="poker-table" style={{ width: ta * 2, height: tb * 2 }}>

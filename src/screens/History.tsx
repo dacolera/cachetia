@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal, TopBar } from '../components/ui';
+import { RoundsTable } from '../components/RoundsTable';
 import { SettlementView } from '../components/SettlementView';
 import { formatMoney, pacts, pot, settle } from '../domain/money';
 import { computeState } from '../domain/rules';
@@ -21,7 +22,13 @@ export function History({ go }: { go: Navigate }) {
             <li key={m.id}>
               <button className="list-item" onClick={() => go(m.finishedAt ? { name: 'detail', id: m.id } : { name: 'match', id: m.id })}>
                 <span className="list-main">
-                  {st.winnerId ? <>🏆 {store.playerName(st.winnerId)}</> : <em>Em andamento</em>}
+                  {st.split ? (
+                    <>✂️ {st.split.map((w) => store.playerName(w.playerId)).join(' e ')} racharam</>
+                  ) : st.winnerId ? (
+                    <>🏆 {store.playerName(st.winnerId)}</>
+                  ) : (
+                    <em>Em andamento</em>
+                  )}
                 </span>
                 <span className="muted">
                   {formatDate(m.createdAt)} · {st.standings.length} jogadores · {st.roundsPlayed} rodada(s)
@@ -50,26 +57,6 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
   }
 
   const final = computeState(match);
-  const playerIds = final.standings.map((s) => s.playerId);
-
-  // Uma linha por rodada, com a pontuação de cada um depois dela.
-  const rows: { label: string; dealerId?: string; handId?: string; winnerId?: string; fled: Set<string>; points: Map<string, number> }[] = [];
-  const firstRound = match.events.findIndex((e) => e.type === 'round');
-  const cuts = [firstRound === -1 ? match.events.length : firstRound];
-  match.events.forEach((e, i) => e.type === 'round' && cuts.push(i + 1));
-  for (const cut of cuts) {
-    const ev = match.events[cut - 1];
-    const st = computeState({ events: match.events.slice(0, cut), firstDealerId: match.firstDealerId });
-    const isRound = ev?.type === 'round';
-    rows.push({
-      label: st.roundsPlayed === 0 ? 'Início' : `Rodada ${st.roundsPlayed}`,
-      dealerId: isRound ? st.dealers[st.dealers.length - 1] : undefined,
-      handId: isRound ? st.hands[st.hands.length - 1] : undefined,
-      winnerId: isRound ? ev.winnerId : undefined,
-      fled: new Set(isRound ? ev.fled : []),
-      points: new Map(st.standings.map((s) => [s.playerId, s.points])),
-    });
-  }
 
   return (
     <main className="screen">
@@ -79,58 +66,18 @@ export function MatchDetail({ go, id }: { go: Navigate; id: string }) {
         </button>
       </TopBar>
 
+      {final.split && (
+        <p className="detail-winner">
+          ✂️ <strong>{final.split.map((w) => store.playerName(w.playerId)).join(' e ')}</strong> racharam o prêmio depois de {final.roundsPlayed} rodada(s)
+        </p>
+      )}
       {final.winnerId && (
         <p className="detail-winner">
           🏆 <strong>{store.playerName(final.winnerId)}</strong> venceu em {final.roundsPlayed} rodada(s)
         </p>
       )}
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th />
-              {playerIds.map((pid) => (
-                <th key={pid}>{store.playerName(pid)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => {
-              const prev = rows[i - 1];
-              return (
-                <tr key={i}>
-                  <th>
-                    {r.label}
-                    {r.dealerId && (
-                      <small className="dealt">
-                        ♠ {store.playerName(r.dealerId)}
-                        {r.handId && `, mão ${store.playerName(r.handId)}`}
-                      </small>
-                    )}
-                  </th>
-                  {playerIds.map((pid) => {
-                    const pts = r.points.get(pid);
-                    if (pts === undefined) return <td key={pid} className="na" />;
-                    const wasOut = prev?.points.get(pid) === 0;
-                    if (wasOut) return <td key={pid} className="na" />;
-                    const joined = prev && !prev.points.has(pid);
-                    const mark = r.winnerId === pid ? 'win' : r.fled.has(pid) ? 'fled' : '';
-                    return (
-                      <td key={pid} className={[mark, pts === 0 && 'zero'].filter(Boolean).join(' ')}>
-                        {pts}
-                        {mark === 'win' && ' ★'}
-                        {mark === 'fled' && <small> fugiu</small>}
-                        {joined && <small> entrou</small>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <RoundsTable match={match} />
 
       {pacts(match).length > 0 && (
         <section className="panel detail-section">

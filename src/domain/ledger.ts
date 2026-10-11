@@ -1,5 +1,5 @@
 import { settle } from './money';
-import type { Match } from './types';
+import type { Match, PrizeShare } from './types';
 
 /**
  * Movimentos do caixa. Valores sempre positivos, em centavos; o efeito depende do tipo:
@@ -18,6 +18,13 @@ export interface LedgerEntry {
   kind: LedgerKind;
   amountCents: number;
   matchId?: string;
+  /**
+   * Dinheiro entregue ao casar: a partida em que foi entregue. Não é `matchId` porque o depósito
+   * é da pessoa (continua como crédito mesmo se a partida for descartada).
+   */
+  refMatchId?: string;
+  /** Evento em que o movimento aconteceu. Movimentos de antes dos eventos pertencem ao primeiro. */
+  eventId?: string;
 }
 
 const BALANCE_EFFECT: Record<LedgerKind, number> = { deposit: 1, credit: 1, withdraw: -1, stake: -1, prizeCash: 0 };
@@ -72,9 +79,8 @@ export function validateWithdraw(ledger: LedgerEntry[], playerId: string, amount
 }
 
 export interface PayoutPlan {
-  winnerId: string;
-  /** Quanto o vencedor recebe do pote, já descontadas as devoluções do livrar. */
-  winnerCents: number;
+  /** Quanto cada vencedor recebe do pote (um, ou os dois que racharam), já descontadas as devoluções do livrar. */
+  winners: PrizeShare[];
   /** Devoluções do livrar: viram crédito de cada um. */
   refunds: { playerId: string; cents: number }[];
 }
@@ -82,19 +88,23 @@ export interface PayoutPlan {
 export function payoutPlan(match: Match): PayoutPlan | undefined {
   const s = settle(match);
   if (!s) return undefined;
-  const refunds = s.returnsTo.map((playerId) => ({ playerId, cents: s.stakeCents }));
-  const winnerCents = s.potCents - refunds.reduce((sum, r) => sum + r.cents, 0);
-  return { winnerId: s.winnerId, winnerCents, refunds };
+  return { winners: s.winners, refunds: s.returnsTo.map((playerId) => ({ playerId, cents: s.stakeCents })) };
 }
 
-/** Lançamentos do pagamento do prêmio: o que não sai em dinheiro fica de crédito para o vencedor. */
-export function payoutEntries(match: Match, cashCents: number, newEntry: (e: Omit<LedgerEntry, 'id' | 'at'>) => LedgerEntry): LedgerEntry[] {
+/** Lançamentos do pagamento do prêmio: para cada vencedor, o que não sai em dinheiro fica de crédito. */
+export function payoutEntries(
+  match: Match,
+  cashByPlayer: Record<string, number>,
+  newEntry: (e: Omit<LedgerEntry, 'id' | 'at'>) => LedgerEntry,
+): LedgerEntry[] {
   const plan = payoutPlan(match);
   if (!plan) return [];
-  const cash = Math.max(0, Math.min(cashCents, plan.winnerCents));
   const out: LedgerEntry[] = [];
-  if (cash > 0) out.push(newEntry({ playerId: plan.winnerId, kind: 'prizeCash', amountCents: cash, matchId: match.id }));
-  if (plan.winnerCents - cash > 0) out.push(newEntry({ playerId: plan.winnerId, kind: 'credit', amountCents: plan.winnerCents - cash, matchId: match.id }));
+  for (const w of plan.winners) {
+    const cash = Math.max(0, Math.min(cashByPlayer[w.playerId] ?? 0, w.cents));
+    if (cash > 0) out.push(newEntry({ playerId: w.playerId, kind: 'prizeCash', amountCents: cash, matchId: match.id }));
+    if (w.cents - cash > 0) out.push(newEntry({ playerId: w.playerId, kind: 'credit', amountCents: w.cents - cash, matchId: match.id }));
+  }
   for (const r of plan.refunds) out.push(newEntry({ playerId: r.playerId, kind: 'credit', amountCents: r.cents, matchId: match.id }));
   return out;
 }

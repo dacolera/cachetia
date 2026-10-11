@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canJoin, computeState, joinPoints, lastUndoable, previewRound, validateRound } from './rules';
+import { canJoin, computeState, joinOpen, joinPoints, lastUndoable, leaders, previewRound, validateFinish, validateRound, validateStart } from './rules';
 import type { Match, MatchEvent } from './types';
 
 let seq = 0;
 const join = (playerId: string, points = 10): MatchEvent => ({ type: 'join', id: `e${seq++}`, at: '', playerId, points });
 const round = (winnerId: string, fled: string[] = []): MatchEvent => ({ type: 'round', id: `e${seq++}`, at: '', winnerId, fled });
+const start = (fled: string[] = []): MatchEvent => ({ type: 'start', id: `e${seq++}`, at: '', fled });
 const match = (...events: MatchEvent[]): Match => ({ id: 'm', createdAt: '', events });
 const points = (m: Match) => Object.fromEntries(computeState(m).standings.map((s) => [s.playerId, s.points]));
 
@@ -51,6 +52,90 @@ describe('rodada', () => {
   it('prévia bate com o resultado real', () => {
     const m = match(join('a'), join('b'), join('c', 1));
     expect(previewRound(computeState(m), { a: 'won', b: 'fled', c: 'lost' })).toEqual({ a: 10, b: 9, c: 0 });
+  });
+});
+
+describe('rodada em duas etapas', () => {
+  it('ao executar, quem correu já perde 1 e o resto da mesa fica jogando', () => {
+    const m = match(join('a'), join('b'), join('c'), start(['b']));
+    const st = computeState(m);
+    expect(points(m)).toEqual({ a: 10, b: 9, c: 10 });
+    expect(st.current).toEqual({ fled: ['b'], playingIds: ['a', 'c'], handId: 'c' });
+    expect(st.roundsPlayed).toBe(0);
+  });
+
+  it('no fim só quem jogou e perdeu perde 2; quem correu não perde de novo', () => {
+    const m = match(join('a'), join('b'), join('c'), start(['b']), round('a', ['b']));
+    const st = computeState(m);
+    expect(points(m)).toEqual({ a: 10, b: 9, c: 8 });
+    expect(st.current).toBeUndefined();
+    expect(st.roundsPlayed).toBe(1);
+  });
+
+  it('dá o mesmo resultado que a rodada lançada de uma vez (partidas antigas)', () => {
+    const two = match(join('a'), join('b'), join('c', 2), start(['b']), round('a', ['b']), start(), round('b'));
+    const one = match(join('a'), join('b'), join('c', 2), round('a', ['b']), round('b'));
+    expect(computeState(two)).toEqual({ ...computeState(one), current: undefined });
+  });
+
+  it('se o mão correu, joga como mão o próximo que ficou; o rodízio segue do mão original', () => {
+    // a dá, b é mão. b e c correm: d joga como mão. Na rodada seguinte b dá e c é mão.
+    const base = [join('a'), join('b'), join('c'), join('d'), start(['b', 'c'])];
+    const m = { ...match(...base), firstDealerId: 'a' };
+    expect(computeState(m).current?.handId).toBe('d');
+    expect(computeState(m).handId).toBe('b');
+    const next = computeState({ ...match(...base, round('a', ['b', 'c'])), firstDealerId: 'a' });
+    expect([next.dealerId, next.handId]).toEqual(['b', 'c']);
+  });
+
+  it('se o mão não correu, ele mesmo joga como mão', () => {
+    const m = { ...match(join('a'), join('b'), join('c'), start(['c'])), firstDealerId: 'a' };
+    expect(computeState(m).current?.handId).toBe('b');
+  });
+
+  it('valida a preparação', () => {
+    const st = computeState(match(join('a'), join('b', 1), join('c')));
+    expect(validateStart(st, { fled: ['c'] })).toBeNull();
+    expect(validateStart(st, { fled: ['b'] })).toMatch(/borracha/);
+    expect(validateStart(st, { fled: ['z'] })).not.toBeNull();
+    expect(validateStart(computeState(match(join('a'), join('b'))), { fled: ['a', 'b'] })).toMatch(/ficar/);
+    expect(validateStart(computeState(match(join('a'), join('b'), start())), { fled: [] })).toMatch(/andamento/);
+  });
+
+  it('o vencedor tem que estar jogando a rodada', () => {
+    const st = computeState(match(join('a'), join('b'), join('c'), start(['b'])));
+    expect(validateFinish(st, 'a')).toBeNull();
+    expect(validateFinish(st, 'b')).not.toBeNull();
+    expect(validateFinish(computeState(match(join('a'), join('b'))), 'a')).not.toBeNull();
+  });
+
+  it('ninguém entra no meio com a rodada em jogo', () => {
+    const st = computeState(match(join('a'), join('b'), start()));
+    expect(joinOpen(st)).toBe(false);
+    expect(canJoin(st, 'z')).toMatch(/andamento/);
+  });
+
+  it('conta vitórias, corridas e derrotas de cada um, inclusive a corrida da rodada em jogo', () => {
+    const m = match(join('a'), join('b'), join('c', 2), round('a', ['b']), start(['b']));
+    const tally = Object.fromEntries(computeState(m).standings.map((s) => [s.playerId, [s.wins, s.fled, s.lost]]));
+    // c zerou na 1ª rodada e não conta mais nada depois disso.
+    expect(tally).toEqual({ a: [1, 0, 0], b: [0, 2, 0], c: [0, 0, 1] });
+  });
+
+  it('a execução pode ser desfeita', () => {
+    const s = start(['b']);
+    expect(lastUndoable(match(join('a'), join('b'), join('c'), s))).toBe(s);
+  });
+});
+
+describe('líderes', () => {
+  it('quem tem mais pontos entre os ativos; empatados, todos', () => {
+    expect(leaders(computeState(match(join('a'), join('b'), join('c'), round('a', ['b']))))).toEqual(['a']);
+    expect(leaders(computeState(match(join('a'), join('b'), join('c'), round('a', ['b']), round('b', ['a']))))).toEqual(['a', 'b']);
+  });
+
+  it('ninguém lidera com todos empatados', () => {
+    expect(leaders(computeState(match(join('a'), join('b'))))).toEqual([]);
   });
 });
 

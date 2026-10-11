@@ -15,12 +15,22 @@ export function SettlementView({ match }: { match: Match }) {
   return (
     <div className="settlement">
       <p>
-        Pote de <strong>{formatMoney(s.potCents)}</strong> ({players} × {formatMoney(s.stakeCents)}) vai para{' '}
-        <strong>{store.playerName(s.winnerId)}</strong>.
+        Pote de <strong>{formatMoney(s.potCents)}</strong> ({players} × {formatMoney(s.stakeCents)})
+        {s.winners.length > 1 ? (
+          <>
+            {' '}
+            rachado: {s.winners.map((w) => `${store.playerName(w.playerId)} leva ${formatMoney(w.cents)}`).join(' e ')}.
+          </>
+        ) : (
+          <>
+            {' '}
+            vai para <strong>{store.playerName(s.winners[0].playerId)}</strong>.
+          </>
+        )}
       </p>
       {s.returnsTo.length > 0 && (
         <p>
-          🤝 Livrou com {s.returnsTo.map((id) => store.playerName(id)).join(', ')}: devolve {formatMoney(s.stakeCents)} para cada um (
+          🤝 Livrou com {s.returnsTo.map((id) => store.playerName(id)).join(', ')}: {s.winners.length > 1 ? 'o pote devolve' : 'devolve'} {formatMoney(s.stakeCents)} para cada um (
           {formatMoney(s.stakeCents * s.returnsTo.length)} no total).
         </p>
       )}

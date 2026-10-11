@@ -1,5 +1,5 @@
 import type { LedgerEntry } from '../domain/ledger';
-import type { Match, Player } from '../domain/types';
+import type { GameEvent, Match, Player } from '../domain/types';
 import type { Backup, Repository } from './repository';
 
 const KEY = 'cacheta:v1';
@@ -8,6 +8,7 @@ interface Data {
   players: Player[];
   matches: Match[];
   ledger: LedgerEntry[];
+  events: GameEvent[];
 }
 
 function load(): Data {
@@ -15,12 +16,12 @@ function load(): Data {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = JSON.parse(raw) as Partial<Data>;
-      return { players: data.players ?? [], matches: data.matches ?? [], ledger: data.ledger ?? [] };
+      return { players: data.players ?? [], matches: data.matches ?? [], ledger: data.ledger ?? [], events: data.events ?? [] };
     }
   } catch {
     // dado corrompido ou storage indisponível: começa vazio
   }
-  return { players: [], matches: [], ledger: [] };
+  return { players: [], matches: [], ledger: [], events: [] };
 }
 
 function persist(data: Data) {
@@ -66,6 +67,13 @@ export const localRepository: Repository = {
     const drop = new Set(ids);
     persist({ ...data, ledger: data.ledger.filter((e) => !drop.has(e.id)) });
   },
+  async listEvents() {
+    return load().events;
+  },
+  async saveEvent(event) {
+    const data = load();
+    persist({ ...data, events: upsert(data.events, event) });
+  },
   async exportAll(): Promise<Backup> {
     const data = load();
     return { version: 1, exportedAt: new Date().toISOString(), ...data };
@@ -74,6 +82,6 @@ export const localRepository: Repository = {
     if (backup?.version !== 1 || !Array.isArray(backup.players) || !Array.isArray(backup.matches)) {
       throw new Error('Arquivo de backup inválido.');
     }
-    persist({ players: backup.players, matches: backup.matches, ledger: backup.ledger ?? [] });
+    persist({ players: backup.players, matches: backup.matches, ledger: backup.ledger ?? [], events: backup.events ?? [] });
   },
 };

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { missingStakes, payoutEntries, validateStake, validateWithdraw, type LedgerEntry } from './domain/ledger';
-import { validatePact } from './domain/money';
-import { START_POINTS, canJoin, computeState, lastUndoable, validateRound } from './domain/rules';
-import type { Match, MatchEvent, Player } from './domain/types';
+import { isValidStake, validatePact, validateSplit } from './domain/money';
+import { START_POINTS, canJoin, computeState, lastUndoable, validateFinish, validateStart } from './domain/rules';
+import { closePlan, legacyEvent, openEvent } from './domain/events';
+import type { GameEvent, Match, MatchEvent, Player, PrizeShare } from './domain/types';
 import { localRepository } from './storage/localRepository';
 import type { Backup, Repository } from './storage/repository';
 
@@ -24,7 +25,10 @@ interface Store {
   updatePlayer(id: string, changes: Partial<Pick<Player, 'name' | 'photo' | 'archived'>>): void;
   startMatch(playerIds: string[], firstDealerId: string, cashierId: string, stakeCents: number): Match;
   addPact(matchId: string, playerIds: string[]): void;
-  addRound(matchId: string, winnerId: string, fled: string[]): void;
+  /** Fim da preparação: quem fugiu perde o ponto agora e o resto da mesa joga a rodada. */
+  startRound(matchId: string, fled: string[]): void;
+  /** Fim da execução: o vencedor mantém os pontos e quem jogou e perdeu perde 2. */
+  finishRound(matchId: string, winnerId: string): void;
   joinMatch(matchId: string, playerId: string, points: number): void;
   undo(matchId: string): void;
   deleteMatch(matchId: string): void;
@@ -34,10 +38,20 @@ interface Store {
   deposit(playerId: string, cents: number): void;
   withdraw(playerId: string, cents: number): void;
   /** Paga o prêmio: `cashCents` sai em dinheiro, o resto do prêmio fica de crédito. */
-  payOut(matchId: string, cashCents: number): void;
+  /** Paga o prêmio: para cada vencedor, `cash[id]` sai em dinheiro e o resto do prêmio dele fica de crédito. */
+  payOut(matchId: string, cash: Record<string, number>): void;
+  /** Os dois que sobraram racham o prêmio, cada um com a parte combinada. A partida termina. */
+  splitPrize(matchId: string, shares: PrizeShare[]): void;
   removeLedgerEntry(id: string): void;
   exportBackup(): Promise<Backup>;
   importBackup(backup: Backup): Promise<void>;
+  events: GameEvent[];
+  /** Evento aberto agora: partidas e movimentos de caixa novos ficam nele. */
+  currentEvent?: GameEvent;
+  /** Abre um evento novo (o caixa nasce zerado). Só depois de encerrar o anterior. */
+  startEvent(name: string): GameEvent;
+  /** Encerra o evento aberto: paga em dinheiro o crédito que sobrou para cada um e zera o caixa. */
+  endEvent(): void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -47,12 +61,18 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [events, setEvents] = useState<GameEvent[]>([]);
 
   const reload = useCallback(async () => {
-    const [p, m, l] = await Promise.all([repo.listPlayers(), repo.listMatches(), repo.listLedger()]);
+    const [p, m, l, ev] = await Promise.all([repo.listPlayers(), repo.listMatches(), repo.listLedger(), repo.listEvents()]);
+    // Dados de antes dos eventos viram o "Evento 1", aberto, para nada ficar sem evento. O id é fixo
+    // para a migração ser idempotente: se a carga rodar duas vezes seguidas, grava o mesmo evento.
+    const legacy = ev.length === 0 ? legacyEvent(m, l, 'evento-1') : undefined;
+    if (legacy) await repo.saveEvent(legacy);
     setPlayers(p);
     setMatches(m);
     setLedger(l);
+    setEvents(legacy ? [legacy] : ev);
     setLoaded(true);
   }, [repo]);
 
@@ -61,6 +81,11 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
   }, [reload]);
 
   const store = useMemo<Store>(() => {
+    const current = openEvent(events);
+    const requireEvent = () => {
+      if (!current) throw new Error('Abra um evento antes.');
+      return current;
+    };
     const findMatch = (id: string) => {
       const m = matches.find((x) => x.id === id);
       if (!m) throw new Error('Partida não encontrada.');
@@ -88,7 +113,11 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
       void repo.removeLedger(ids);
     };
 
-    const newEntry = (e: Omit<LedgerEntry, 'id' | 'at'>): LedgerEntry => ({ ...e, id: uid(), at: now() });
+    // Todo movimento de caixa fica no evento aberto (ou no da partida, se for de uma partida).
+    const newEntry = (e: Omit<LedgerEntry, 'id' | 'at'>): LedgerEntry => {
+      const eventId = (e.matchId && matches.find((m) => m.id === e.matchId)?.eventId) || current?.id;
+      return { ...e, eventId, id: uid(), at: now() };
+    };
 
     const isPayout = (matchId: string) => (e: LedgerEntry) => e.matchId === matchId && (e.kind === 'credit' || e.kind === 'prizeCash');
 
@@ -117,10 +146,12 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         void repo.savePlayer(next);
       },
       startMatch(playerIds, firstDealerId, cashierId, stakeCents) {
+        if (!isValidStake(stakeCents)) throw new Error('O valor casado precisa ser múltiplo de R$ 10,00.');
         const at = now();
         const m: Match = {
           id: uid(),
           createdAt: at,
+          eventId: requireEvent().id,
           firstDealerId,
           cashierId,
           stakeCents,
@@ -129,12 +160,19 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         putMatch(m);
         return m;
       },
-      addRound(matchId, winnerId, fled) {
+      startRound(matchId, fled) {
         const m = findMatch(matchId);
-        const err = validateRound(computeState(m), { winnerId, fled });
+        const err = validateStart(computeState(m), { fled });
         if (err) throw new Error(err);
         if (missingStakes(m, ledger).length > 0) throw new Error('Todos precisam casar antes da rodada.');
-        append(matchId, { type: 'round', id: uid(), at: now(), winnerId, fled });
+        append(matchId, { type: 'start', id: uid(), at: now(), fled });
+      },
+      finishRound(matchId, winnerId) {
+        const state = computeState(findMatch(matchId));
+        const err = validateFinish(state, winnerId);
+        if (err) throw new Error(err);
+        // O evento de fim repete quem fugiu: histórico e estatísticas leem a rodada inteira dele.
+        append(matchId, { type: 'round', id: uid(), at: now(), winnerId, fled: state.current!.fled });
       },
       addPact(matchId, playerIds) {
         const m = findMatch(matchId);
@@ -170,11 +208,12 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         const err = validateStake(m, ledger, playerId, depositCents);
         if (err) throw new Error(err);
         const entries = [];
-        if (depositCents > 0) entries.push(newEntry({ playerId, kind: 'deposit', amountCents: depositCents }));
+        if (depositCents > 0) entries.push(newEntry({ playerId, kind: 'deposit', amountCents: depositCents, refMatchId: matchId }));
         entries.push(newEntry({ playerId, kind: 'stake', amountCents: m.stakeCents!, matchId }));
         addEntries(entries);
       },
       deposit(playerId, cents) {
+        requireEvent();
         if (cents <= 0) throw new Error('Valor inválido.');
         addEntries([newEntry({ playerId, kind: 'deposit', amountCents: cents })]);
       },
@@ -183,14 +222,40 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         if (err) throw new Error(err);
         addEntries([newEntry({ playerId, kind: 'withdraw', amountCents: cents })]);
       },
-      payOut(matchId, cashCents) {
+      splitPrize(matchId, shares) {
+        const m = findMatch(matchId);
+        const err = validateSplit(m, computeState(m), shares);
+        if (err) throw new Error(err);
+        append(matchId, { type: 'split', id: uid(), at: now(), shares });
+      },
+      payOut(matchId, cash) {
         const m = findMatch(matchId);
         if (m.paidOutAt || !m.finishedAt) return;
-        addEntries(payoutEntries(m, cashCents, newEntry));
+        addEntries(payoutEntries(m, cash, newEntry));
         putMatch({ ...m, paidOutAt: now() });
       },
       removeLedgerEntry(id) {
         removeEntries((e) => e.id === id);
+      },
+      events,
+      currentEvent: current,
+      startEvent(name) {
+        if (current) throw new Error('Encerre o evento aberto antes de abrir outro.');
+        const ev: GameEvent = { id: uid(), name: name.trim() || 'Evento', startedAt: now() };
+        setEvents((list) => [...list, ev]);
+        void repo.saveEvent(ev);
+        return ev;
+      },
+      endEvent() {
+        const ev = requireEvent();
+        const plan = closePlan(ledger, matches, events, ev);
+        if (plan.blockers.length > 0) throw new Error(plan.blockers[0]);
+        // O crédito que sobrou é pago em dinheiro a cada um, no mesmo instante do encerramento.
+        const at = now();
+        addEntries(plan.payouts.map((p) => ({ id: uid(), at, playerId: p.playerId, kind: 'withdraw', amountCents: p.cents, eventId: ev.id })));
+        const closed = { ...ev, endedAt: at };
+        setEvents((list) => list.map((x) => (x.id === ev.id ? closed : x)));
+        void repo.saveEvent(closed);
       },
       exportBackup: () => repo.exportAll(),
       async importBackup(backup) {
@@ -198,7 +263,7 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
         await reload();
       },
     };
-  }, [loaded, players, matches, ledger, repo, reload]);
+  }, [loaded, players, matches, ledger, events, repo, reload]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

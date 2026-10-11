@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EndEventModal, EventCashModal, EventsListModal, StartEventModal } from '../components/EventModals';
 import { Avatar } from '../components/Avatar';
 import { DepositModal, WithdrawModal } from '../components/CashModals';
 import { Modal, TopBar } from '../components/ui';
@@ -22,6 +23,8 @@ type Dialog = { kind: 'deposit' | 'withdraw' | 'statement'; playerId: string } |
 export function Cash({ go }: { go: Navigate }) {
   const store = useStore();
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [showDay, setShowDay] = useState(false);
+  const [eventDialog, setEventDialog] = useState<'start' | 'end' | 'list' | null>(null);
   const bal = balances(store.ledger);
   const cash = cashInBox(store.ledger);
   const credits = [...bal.values()].reduce((a, b) => a + b, 0);
@@ -33,10 +36,31 @@ export function Cash({ go }: { go: Navigate }) {
 
   return (
     <main className="screen">
-      <TopBar title="Caixa" onBack={() => go({ name: 'home' })} />
+      <TopBar title="Caixa" onBack={() => go({ name: 'home' })}>
+        {store.currentEvent ? (
+          <>
+            <button className="btn ghost" onClick={() => setShowDay(true)}>
+              🗓️ Caixa do evento
+            </button>
+            <button className="btn ghost danger-text" onClick={() => setEventDialog('end')}>
+              Encerrar evento
+            </button>
+          </>
+        ) : (
+          <button className="btn ghost" onClick={() => setEventDialog('start')}>
+            + Abrir evento
+          </button>
+        )}
+        <button className="btn ghost" onClick={() => setEventDialog('list')}>
+          Eventos
+        </button>
+      </TopBar>
 
       <section className="panel cash-total">
-        <span className="muted">Dinheiro que deve estar na caixa</span>
+        <span className="muted">
+          {store.currentEvent ? <>🗓️ {store.currentEvent.name} · </> : <>Nenhum evento aberto · </>}
+          Dinheiro que deve estar na caixa
+        </span>
         <strong>{formatMoney(cash)}</strong>
         <span className="muted">
           {formatMoney(credits)} de crédito dos jogadores + {formatMoney(pots)} em potes de partidas em andamento
@@ -56,7 +80,7 @@ export function Cash({ go }: { go: Navigate }) {
                 </span>
               </button>
               <div className="cash-row-actions">
-                <button className="btn" onClick={() => setDialog({ kind: 'deposit', playerId: p.id })}>
+                <button className="btn" disabled={!store.currentEvent} onClick={() => setDialog({ kind: 'deposit', playerId: p.id })}>
                   Entregar
                 </button>
                 <button className="btn" disabled={b <= 0} onClick={() => setDialog({ kind: 'withdraw', playerId: p.id })}>
@@ -68,6 +92,10 @@ export function Cash({ go }: { go: Navigate }) {
         })}
       </ul>
 
+      {showDay && <EventCashModal onClose={() => setShowDay(false)} />}
+      {eventDialog === 'start' && <StartEventModal onClose={() => setEventDialog(null)} />}
+      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} />}
+      {eventDialog === 'list' && <EventsListModal onClose={() => setEventDialog(null)} />}
       {dialog?.kind === 'deposit' && <DepositModal playerId={dialog.playerId} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'withdraw' && <WithdrawModal playerId={dialog.playerId} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'statement' && <Statement playerId={dialog.playerId} onClose={() => setDialog(null)} />}
@@ -87,7 +115,7 @@ function Statement({ playerId, onClose }: { playerId: string; onClose: () => voi
     if (e.kind === 'deposit') return balance - e.amountCents >= 0;
     if (e.kind === 'stake') {
       const m = store.matches.find((x) => x.id === e.matchId);
-      return !!m && !m.finishedAt && !m.events.some((ev) => ev.type === 'round');
+      return !!m && !m.finishedAt && !m.events.some((ev) => ev.type === 'round' || ev.type === 'start');
     }
     return false;
   }

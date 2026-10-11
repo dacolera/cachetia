@@ -26,6 +26,8 @@ export default defineConfig({
       // para não perder um lançamento de rodada pela metade.
       registerType: 'prompt',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      // Fontes (só o subconjunto latino, que cobre o português) e cédulas vão no cache para funcionar offline.
+      workbox: { globPatterns: ['**/*.{js,css,html}', '**/*-latin-wght-normal-*.woff2', 'notes/*.jpg'] },
       manifest: {
         name: 'Cacheta da Família',
         short_name: 'Cacheta',

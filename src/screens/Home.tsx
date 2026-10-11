@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { EndEventModal, EventsListModal, StartEventModal } from '../components/EventModals';
 import { Modal } from '../components/ui';
 import { computeState } from '../domain/rules';
 import type { Navigate } from '../nav';
@@ -10,6 +11,8 @@ export function Home({ go }: { go: Navigate }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [eventDialog, setEventDialog] = useState<'start' | 'start-then-new' | 'end' | 'list' | null>(null);
+  const current = store.currentEvent;
 
   const ongoing = [...store.matches].reverse().find((m) => !m.finishedAt);
   const ongoingState = ongoing && computeState(ongoing);
@@ -50,6 +53,37 @@ export function Home({ go }: { go: Navigate }) {
         <h1>Cacheta da Família</h1>
       </div>
 
+      <section className="event-card">
+        {current ? (
+          <>
+            <span className="event-label">🗓️ Evento aberto</span>
+            <strong className="event-name">{current.name}</strong>
+            <span className="event-info">desde {formatDate(current.startedAt)}</span>
+            <div className="event-actions">
+              <button className="btn ghost" onClick={() => setEventDialog('list')}>
+                Eventos
+              </button>
+              <button className="btn ghost danger-text" onClick={() => setEventDialog('end')}>
+                Encerrar evento
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="event-label">Nenhum evento aberto</span>
+            <span className="event-info">Abra um evento para jogar: o caixa dele começa zerado.</span>
+            <div className="event-actions">
+              <button className="btn ghost" onClick={() => setEventDialog('list')}>
+                Eventos
+              </button>
+              <button className="btn" onClick={() => setEventDialog('start')}>
+                + Abrir evento
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+
       {ongoing && ongoingState && (
         <button className="ongoing" onClick={() => go({ name: 'match', id: ongoing.id })}>
           <span className="ongoing-label">Partida em andamento</span>
@@ -61,7 +95,7 @@ export function Home({ go }: { go: Navigate }) {
       )}
 
       <div className="home-actions">
-        <button className="btn primary big" onClick={() => (ongoing ? setConfirmNew(true) : go({ name: 'new' }))}>
+        <button className="btn primary big" onClick={() => (ongoing ? setConfirmNew(true) : current ? go({ name: 'new' }) : setEventDialog('start-then-new'))}>
           Nova partida
         </button>
         <button className="btn big" onClick={() => go({ name: 'cash' })}>
@@ -98,6 +132,19 @@ export function Home({ go }: { go: Navigate }) {
         />
       </footer>
       <p className="app-version">versão {__APP_VERSION__}</p>
+      <p className="app-version">
+        Cédulas via Wikimedia Commons: R$ 10, 20 e 50 por Rawlan1998 (
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br" target="_blank" rel="noreferrer">
+          CC BY-SA 4.0
+        </a>
+        ); R$ 100 e 200 em domínio público.
+      </p>
+
+      {(eventDialog === 'start' || eventDialog === 'start-then-new') && (
+        <StartEventModal onClose={() => setEventDialog(null)} onStarted={() => eventDialog === 'start-then-new' && go({ name: 'new' })} />
+      )}
+      {eventDialog === 'end' && <EndEventModal onClose={() => setEventDialog(null)} />}
+      {eventDialog === 'list' && <EventsListModal onClose={() => setEventDialog(null)} />}
 
       {confirmNew && ongoing && (
         <Modal

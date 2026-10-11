@@ -83,8 +83,7 @@ describe('prêmio', () => {
 
   it('vencedor recebe o pote menos as devoluções; quem livrou recebe crédito', () => {
     expect(payoutPlan(m)).toEqual({
-      winnerId: 'ana',
-      winnerCents: 3000,
+      winners: [{ playerId: 'ana', cents: 3000 }],
       refunds: [
         { playerId: 'beto', cents: 1000 },
         { playerId: 'caio', cents: 1000 },
@@ -93,7 +92,7 @@ describe('prêmio', () => {
   });
 
   it('prêmio todo em dinheiro', () => {
-    const ledger = [...deposits, ...payoutEntries(m, 3000, mk)];
+    const ledger = [...deposits, ...payoutEntries(m, { ana: 3000 }, mk)];
     const paid = [{ ...m, paidOutAt: 'x' }];
     expect(balanceOf(ledger, 'ana')).toBe(0);
     expect(balanceOf(ledger, 'beto')).toBe(9000 + 1000);
@@ -103,18 +102,32 @@ describe('prêmio', () => {
   });
 
   it('sem troco: parte do prêmio fica de crédito para o vencedor', () => {
-    const ledger = [...deposits, ...payoutEntries(m, 2000, mk)];
+    const ledger = [...deposits, ...payoutEntries(m, { ana: 2000 }, mk)];
     expect(balanceOf(ledger, 'ana')).toBe(1000);
     expect(closes(ledger, [{ ...m, paidOutAt: 'x' }])).toBe(true);
   });
 
   it('o dinheiro nunca passa do prêmio', () => {
-    const ledger = payoutEntries(m, 999999, mk);
+    const ledger = payoutEntries(m, { ana: 999999 }, mk);
     expect(ledger.find((e) => e.kind === 'prizeCash')?.amountCents).toBe(3000);
   });
 
   it('antes de pagar, o pote conta como dinheiro em jogo e o caixa fecha', () => {
     expect(openPots(deposits, [m])).toBe(5000);
     expect(closes(deposits, [m])).toBe(true);
+  });
+});
+
+describe('pagamento do racha', () => {
+  it('cada um dos dois leva a sua parte, em dinheiro ou crédito, e o caixa fecha', () => {
+    const m: Match = {
+      ...match('r', join('a', 3), join('b', 3), join('c', 1), round('a'), { type: 'split', id: 's', at: '', shares: [{ playerId: 'a', cents: 2000 }, { playerId: 'b', cents: 1000 }] }),
+    };
+    const deposits = ['a', 'b', 'c'].flatMap((id) => [entry(id, 'deposit', 1000), entry(id, 'stake', 1000, 'r')]);
+    const ledger = [...deposits, ...payoutEntries(m, { a: 2000, b: 500 }, mk)];
+    expect(balanceOf(ledger, 'a')).toBe(0);
+    expect(balanceOf(ledger, 'b')).toBe(500);
+    expect(cashInBox(ledger)).toBe(3000 - 2500);
+    expect(closes(ledger, [{ ...m, paidOutAt: 'x' }])).toBe(true);
   });
 });

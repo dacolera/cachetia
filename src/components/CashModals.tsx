@@ -164,3 +164,40 @@ export function WithdrawModal({ playerId, onClose }: { playerId: string; onClose
     </Modal>
   );
 }
+
+/** Pagar um jogador em dinheiro vivo: escolhe quem tem crédito e saca dele (sai da caixa e do crédito). */
+export function PayPlayerModal({ onClose }: { onClose: () => void }) {
+  const store = useStore();
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  if (playerId) return <WithdrawModal playerId={playerId} onClose={onClose} />;
+  const withCredit = store.players
+    .map((p) => ({ p, balance: balanceOf(store.ledger, p.id) }))
+    .filter((x) => x.balance > 0)
+    .sort((a, b) => a.p.name.localeCompare(b.p.name, 'pt-BR'));
+  return (
+    <Modal
+      title="Pagar jogador em dinheiro"
+      onClose={onClose}
+      actions={
+        <button className="btn" onClick={onClose}>
+          Cancelar
+        </button>
+      }
+    >
+      <p>O dinheiro sai da caixa e do crédito do jogador. Quem vai receber?</p>
+      {withCredit.length === 0 ? (
+        <p className="muted">Ninguém tem crédito para receber.</p>
+      ) : (
+        <div className="chips">
+          {withCredit.map(({ p, balance }) => (
+            <button key={p.id} className="chip" onClick={() => setPlayerId(p.id)}>
+              <Avatar player={p} size={34} />
+              {p.name}
+              <small className="chip-sub">{formatMoney(balance)}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
