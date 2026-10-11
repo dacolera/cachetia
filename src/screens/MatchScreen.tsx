@@ -7,7 +7,7 @@ import { PokerTable } from '../components/PokerTable';
 import { SettlementView } from '../components/SettlementView';
 import { PayPlayerModal, StakeModal } from '../components/CashModals';
 import { PayoutPanel } from '../components/PayoutPanel';
-import { balanceOf, balances, cashInBox, missingStakes } from '../domain/ledger';
+import { balanceOf, balances, cashInBox, hasPot, missingStakes } from '../domain/ledger';
 import { formatMoney, pacts, parseMoney, pot, prizeFor, roundPact, validatePact, validateSplit } from '../domain/money';
 import { fromCashier } from '../components/tableLayout';
 import { DealerBadge, HandBadge, Modal, Tally, TopBar } from '../components/ui';
@@ -59,7 +59,8 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
   const inPact = new Set(pacts(match).flatMap((p) => p.playerIds));
   const missing = missingStakes(match, store.ledger);
   const seatedCount = state.standings.length;
-  const needsPayout = state.finished && match.stakeCents !== undefined && !match.paidOutAt;
+  const withPot = hasPot(store.ledger, match);
+  const needsPayout = state.finished && withPot && !match.paidOutAt;
 
 
   function toggleFled(pid: string) {
@@ -369,7 +370,11 @@ export function MatchScreen({ go, id }: { go: Navigate; id: string }) {
             )
           )}
           <SettlementView match={match} />
-          {match.stakeCents !== undefined && <PayoutPanel match={match} />}
+          {withPot ? (
+            <PayoutPanel match={match} />
+          ) : (
+            match.stakeCents !== undefined && <p className="muted">Partida de antes do caixa: ninguém casou pelo app, então o prêmio foi acertado fora dele.</p>
+          )}
         </Modal>
       )}
 

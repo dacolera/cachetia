@@ -1,4 +1,4 @@
-import { balances, cashInBox, type LedgerEntry, type LedgerKind } from './ledger';
+import { balances, cashInBox, hasPot, type LedgerEntry, type LedgerKind } from './ledger';
 import type { GameEvent, Match } from './types';
 
 const byStart = (events: GameEvent[]) => [...events].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
@@ -91,20 +91,33 @@ export function eventCash(ledger: LedgerEntry[], matches: Match[], events: GameE
   return { event, matches: list, opening, moves, cashIn, cashOut, closing: cash };
 }
 
+export interface CloseBlocker {
+  matchId: string;
+  /** Número da partida no evento. */
+  number: number;
+  reason: 'ongoing' | 'unpaid';
+}
+
 export interface ClosePlan {
-  /** O que impede encerrar agora. */
-  blockers: string[];
+  /** O que impede encerrar agora: cada partida que precisa ser terminada (ou descartada) ou paga. */
+  blockers: CloseBlocker[];
   /** Crédito que sobrou para cada um: é pago em dinheiro no encerramento. */
   payouts: { playerId: string; cents: number }[];
   totalCents: number;
 }
 
-/** Encerrar o evento: sem partida em andamento nem prêmio a pagar; o crédito de todos vira dinheiro. */
+/**
+ * Encerrar o evento: sem partida em andamento nem prêmio a pagar; o crédito de todos vira dinheiro.
+ * Só há prêmio a pagar se alguém casou pelo caixa: partidas de antes do caixa têm valor, mas o
+ * dinheiro foi acertado fora do app e não há pote para pagar.
+ */
 export function closePlan(ledger: LedgerEntry[], matches: Match[], events: GameEvent[], event: GameEvent): ClosePlan {
   const list = eventMatches(matches, events, event.id);
-  const blockers: string[] = [];
-  if (list.some((m) => !m.finishedAt)) blockers.push('Há uma partida em andamento: termine ou descarte antes de encerrar.');
-  if (list.some((m) => m.finishedAt && m.stakeCents !== undefined && !m.paidOutAt)) blockers.push('Há prêmio de partida ainda não pago.');
+  const blockers: CloseBlocker[] = [];
+  list.forEach((m, i) => {
+    if (!m.finishedAt) blockers.push({ matchId: m.id, number: i + 1, reason: 'ongoing' });
+    else if (hasPot(ledger, m) && !m.paidOutAt) blockers.push({ matchId: m.id, number: i + 1, reason: 'unpaid' });
+  });
   const payouts = [...balances(ledger).entries()].filter(([, cents]) => cents > 0).map(([playerId, cents]) => ({ playerId, cents }));
   return { blockers, payouts, totalCents: payouts.reduce((s, p) => s + p.cents, 0) };
 }

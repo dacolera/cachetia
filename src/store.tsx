@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { missingStakes, payoutEntries, validateStake, validateWithdraw, type LedgerEntry } from './domain/ledger';
+import { hasPot, missingStakes, payoutEntries, validateStake, validateWithdraw, type LedgerEntry } from './domain/ledger';
 import { isValidStake, validatePact, validateSplit } from './domain/money';
 import { START_POINTS, canJoin, computeState, lastUndoable, validateFinish, validateStart } from './domain/rules';
 import { closePlan, legacyEvent, openEvent } from './domain/events';
@@ -230,7 +230,8 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
       },
       payOut(matchId, cash) {
         const m = findMatch(matchId);
-        if (m.paidOutAt || !m.finishedAt) return;
+        // Sem pote no caixa (partida de antes do caixa) não há o que pagar: o prêmio viraria crédito do nada.
+        if (m.paidOutAt || !m.finishedAt || !hasPot(ledger, m)) return;
         addEntries(payoutEntries(m, cash, newEntry));
         putMatch({ ...m, paidOutAt: now() });
       },
@@ -249,7 +250,7 @@ export function StoreProvider({ children, repo = localRepository }: { children: 
       endEvent() {
         const ev = requireEvent();
         const plan = closePlan(ledger, matches, events, ev);
-        if (plan.blockers.length > 0) throw new Error(plan.blockers[0]);
+        if (plan.blockers.length > 0) throw new Error('Há partida em andamento ou prêmio a pagar no evento.');
         // O crédito que sobrou é pago em dinheiro a cada um, no mesmo instante do encerramento.
         const at = now();
         addEntries(plan.payouts.map((p) => ({ id: uid(), at, playerId: p.playerId, kind: 'withdraw', amountCents: p.cents, eventId: ev.id })));

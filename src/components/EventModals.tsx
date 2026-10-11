@@ -178,7 +178,7 @@ export function StartEventModal({ onClose, onStarted }: { onClose: () => void; o
 }
 
 /** Encerrar o evento: paga em dinheiro o crédito de cada um e o caixa fica zerado. */
-export function EndEventModal({ onClose }: { onClose: () => void }) {
+export function EndEventModal({ onClose, onOpenMatch }: { onClose: () => void; onOpenMatch: (matchId: string) => void }) {
   const store = useStore();
   const event = store.currentEvent;
   if (!event) return null;
@@ -207,11 +207,28 @@ export function EndEventModal({ onClose }: { onClose: () => void }) {
       }
     >
       {blocked ? (
-        plan.blockers.map((b) => (
-          <p key={b} className="error">
-            {b}
-          </p>
-        ))
+        <>
+          <p className="error">Antes de encerrar, resolva estas partidas:</p>
+          <ul className="close-blockers">
+            {plan.blockers.map((b) => (
+              <li key={b.matchId}>
+                <span>
+                  <strong>Partida {b.number}</strong>
+                  {b.reason === 'ongoing' ? ' ainda está em andamento: termine ou descarte.' : ' terminou, mas o prêmio não foi pago.'}
+                </span>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenMatch(b.matchId);
+                  }}
+                >
+                  {b.reason === 'ongoing' ? 'Abrir' : 'Pagar'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : plan.payouts.length === 0 ? (
         <p>Ninguém tem crédito: o caixa já está zerado.</p>
       ) : (
